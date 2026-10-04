@@ -1,0 +1,2 @@
+option('wlr_src_dir', type: 'string', value: '/home/ne0w0r1d/Desktop/wlroots',
+	description: 'Path to the wlroots source tree (for protocol XML)')
