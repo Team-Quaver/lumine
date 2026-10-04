@@ -1,6 +1,6 @@
 # Lumine
 
-基于 wlroots 0.21 的轻量 Wayland 合成器 MVP，参考 `/home/ne0w0r1d/Desktop/wlroots` 的 wlroots 代码实现。
+基于 wlroots 0.21 的轻量 Wayland 合成器 MVP，参考 wlroots 代码实现。
 
 核心特性：
 
