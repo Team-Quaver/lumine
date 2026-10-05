@@ -98,12 +98,16 @@ WLR_BACKENDS=wayland WAYLAND_DISPLAY=wayland-1 ./build/lumine "kitty && noctalia
 - `build/lumine-shot <out.png>`：screencopy 截图（支持 NVIDIA 的 24bpp BG24 readback，grim 不支持）。
 - `build/lumine-input abs|click|press|release|drag ...`：经 virtual-pointer 注入合成指针事件（拖拽/点击回归测试用）。
 - `build/lumine-layer-test`：layer surface「映射→销毁」生命周期回归测试。
+- `build/lumine-drag-test`：CSD 式客户端，按下即发 `xdg_toplevel.move` 并要求合成器事后仍送达配对的 release——卡死抓取（拖拽后指针冻结）回归测试，两次完整 press→release 循环后退出 0。
 
 例如完整回归：
 
 ```sh
-WLR_BACKENDS=wayland WAYLAND_DISPLAY=wayland-1 \
-LUMINE_TEST="1.5 spawn kitty; 2 spawn kitty; 3 mode; 4 mode; 5 quit" ./build/lumine
+# 终端 1：嵌套合成器（记录实际输出尺寸，父合成器会在启动后立即 resize）
+WLR_BACKENDS=wayland WLR_LIBINPUT_NO_DEVICES=1 LUMINE_TEST="20 quit" ./build/lumine &
+# 终端 2：在嵌套 socket 上跑拖拽回归（窗口 200x100 位于左上角，按压点须落在其内）
+WAYLAND_DISPLAY=wayland-0 ./build/lumine-drag-test &
+WAYLAND_DISPLAY=wayland-0 ./build/lumine-input drag 100 50 200 150 1000 1224
 ```
 
 ## 已验证
@@ -111,7 +115,7 @@ LUMINE_TEST="1.5 spawn kitty; 2 spawn kitty; 3 mode; 4 mode; 5 quit" ./build/lum
 - [x] Tiling（master-stack 平铺、比例调整、顺序移动）
 - [x] Stack（层叠、Super 拖动/缩放、模式往返切换）
 - [x] 窗口动画（fade-in+上浮 / 布局 glide / 关闭快照淡出，帧级截图验证）
-- [x] CSD 标题栏拖拽（kitty 子表面 + 隐式抓取保持）与拖拽后不黏鼠标
+- [x] CSD 标题栏拖拽（kitty 子表面 + 隐式抓取保持）与拖拽后不黏鼠标（lumine-drag-test 回归：request_move 后 release 必须送达，否则 seat 隐式抓取卡死、指针全挂）
 - [x] `wp_color_manager_v1` v2 + `wp_color_representation_v1` 注册（wayland-info 验证）
 - [x] HDR 探测/开关代码路径（嵌套后端正确报告不支持；DRM 上随面板能力启用）
 - [x] Noctalia 壳：壁纸、顶栏（exclusive zone 正确压缩工作区）、dock、通知、tooltip popup

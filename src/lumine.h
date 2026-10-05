@@ -235,5 +235,7 @@ void lumine_seat_init(struct lumine_server *server);
 void lumine_begin_move(struct lumine_toplevel *toplevel, uint32_t time);
 void lumine_begin_resize(struct lumine_toplevel *toplevel, uint32_t time,
 	uint32_t edges);
+/* Leave any interactive move/resize and restore default cursor state. */
+void lumine_cursor_reset(struct lumine_server *server);
 
 #endif

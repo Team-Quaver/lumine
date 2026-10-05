@@ -110,3 +110,18 @@ executable('lumine-layer-test', 'tools/lumine-layer-test.c',
 	dependencies: [wayland_client, wayland_protocols],
 	c_args: ['-I' + meson.current_build_dir()],
 )
+
+# Test helper: CSD-style client that starts an interactive move on button
+# press and requires the matching release afterwards (stuck-grab regression
+# test: a compositor that swallows the release freezes pointer input).
+xdg_shell_client_h = custom_target(
+	'xdg_shell_client_h',
+	input: xdg_shell_xml,
+	output: 'xdg-shell-client-protocol.h',
+	command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+executable('lumine-drag-test', 'tools/lumine-drag-test.c',
+	xdg_shell_client_h, xdg_shell_client_c,
+	dependencies: [wayland_client, wayland_protocols],
+	c_args: ['-I' + meson.current_build_dir()],
+)

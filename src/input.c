@@ -16,58 +16,60 @@ static void keyboard_handle_modifiers(struct wl_listener *listener, void *data) 
 		&keyboard->wlr_keyboard->modifiers);
 }
 
-static void handle_binding(struct lumine_server *server, uint32_t mods,
+/* Returns whether the keysym was bound; unbound combos must fall through
+ * to the client, or holding Super makes every keystroke vanish. */
+static bool handle_binding(struct lumine_server *server, uint32_t mods,
 		xkb_keysym_t sym) {
 	if (sym == XKB_KEY_Return) {
 		const char *terminal = getenv("LUMINE_TERMINAL");
 		lumine_spawn(terminal != NULL ? terminal : "kitty");
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_E && (mods & WLR_MODIFIER_SHIFT)) {
 		wlr_log(WLR_INFO, "quitting on user request");
 		wl_display_terminate(server->display);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_q) {
 		if (server->focused_toplevel != NULL) {
 			lumine_toplevel_close(server->focused_toplevel);
 		}
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_m) {
 		lumine_toggle_mode(server);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_j || sym == XKB_KEY_Down) {
 		lumine_focus_next(server, 1);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_k || sym == XKB_KEY_Up) {
 		lumine_focus_next(server, -1);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_J) {
 		lumine_move_focused(server, 1);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_K) {
 		lumine_move_focused(server, -1);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_h) {
 		lumine_adjust_master_ratio(server, -0.05);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_l) {
 		lumine_adjust_master_ratio(server, 0.05);
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_x) {
 		struct lumine_output *output = lumine_focused_output(server);
 		if (output != NULL) {
 			lumine_output_toggle_hdr(output);
 		}
-		return;
+		return true;
 	}
 	if (sym == XKB_KEY_f) {
 		if (server->focused_toplevel != NULL) {
@@ -75,8 +77,9 @@ static void handle_binding(struct lumine_server *server, uint32_t mods,
 				server->focused_toplevel->xdg_toplevel;
 			wlr_xdg_toplevel_set_fullscreen(t, !t->requested.fullscreen);
 		}
-		return;
+		return true;
 	}
+	return false;
 }
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
@@ -95,9 +98,8 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 	bool handled = false;
 	if ((mods & WLR_MODIFIER_LOGO) &&
 			event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-		for (int i = 0; i < nsyms; i++) {
-			handle_binding(server, mods, syms[i]);
-			handled = true;
+		for (int i = 0; i < nsyms && !handled; i++) {
+			handled = handle_binding(server, mods, syms[i]);
 		}
 	}
 
@@ -262,6 +264,10 @@ static void reset_cursor_mode(struct lumine_server *server) {
 	wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
 }
 
+void lumine_cursor_reset(struct lumine_server *server) {
+	reset_cursor_mode(server);
+}
+
 void lumine_begin_move(struct lumine_toplevel *toplevel, uint32_t time) {
 	struct lumine_server *server = toplevel->server;
 	if (server->cursor_mode != LUMINE_CURSOR_PASSTHROUGH ||
@@ -376,13 +382,16 @@ static void process_cursor_motion(struct lumine_server *server,
 		 * when the cursor wanders onto other surfaces (CSD title bars are
 		 * separate sub-surfaces; re-entering would break client grabs). */
 		int nx = 0, ny = 0;
-		if (server->grab_node == NULL ||
-				!wlr_scene_node_coords(server->grab_node, &nx, &ny)) {
+		if (server->grab_node != NULL &&
+				wlr_scene_node_coords(server->grab_node, &nx, &ny)) {
+			wlr_seat_pointer_notify_motion(seat, time,
+				server->cursor->x - nx, server->cursor->y - ny);
 			return;
 		}
-		wlr_seat_pointer_notify_motion(seat, time,
-			server->cursor->x - nx, server->cursor->y - ny);
-		return;
+		/* The pressed surface is gone (window closed under the held
+		 * button): fall through to hover handling so the pointer keeps
+		 * working; entering another surface resets the seat's
+		 * pressed-button state. */
 	}
 
 	if (surface == NULL) {
@@ -434,10 +443,22 @@ static void cursor_handle_button(struct wl_listener *listener, void *data) {
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
 		if (server->cursor_mode != LUMINE_CURSOR_PASSTHROUGH) {
 			reset_cursor_mode(server);
-			return;
 		}
+		/* Always deliver the release. A compositor-initiated drag (Logo+
+		 * button) swallowed the press, so wlroots drops this unmatched
+		 * release — but a client-initiated drag (CSD title bar) did get
+		 * the press, and skipping its release leaves the button pressed
+		 * in seat state forever: the implicit grab never ends and the
+		 * pointer freezes for every client. */
 		wlr_seat_pointer_notify_button(server->seat, event->time_msec,
 			event->button, event->state);
+		return;
+	}
+
+	if (server->cursor_mode != LUMINE_CURSOR_PASSTHROUGH) {
+		/* An interactive move/resize owns the pointer; a second button
+		 * pressed during the drag must not reach clients, or it too
+		 * would stay pressed in the client's view. */
 		return;
 	}
 
