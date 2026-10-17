@@ -1,9 +1,14 @@
 # Lumine
 
-纯 Go 实现的 Wayland 合成器 MVP。**不使用 CGO**：Wayland 协议、Vulkan 绑定、
-共享内存、配置解析全部使用 Go 标准库与纯 Go 第三方库实现。需要原生库时
-（Vulkan loader）通过 [purego](https://github.com/ebitengine/purego) 在运行时
-`dlopen`，不链接任何 C 代码。
+中文翻译为荧光，是一个基于 Go 实现的，以简洁、百变、万能为名头的 Wayland 合成器
+
+与此同时，我们正在基于 MyGo 开发一系列 Lumine 扩展的原生软件（如文件管理器 Phoenix、照片查看器 Charlotte、音频播放器 Fermata）
+
+目前还是实验性产物，远远无法达到可使用层级
+
+纯 Go 实现的 Wayland 合成器试验品。**不使用 CGO**。
+
+Wayland 协议、Vulkan 绑定、共享内存、配置解析全部使用 Go 标准库与纯 Go 第三方库实现。需要原生库时（Vulkan loader）通过 [purego](https://github.com/ebitengine/purego) 在运行时 `dlopen`，不链接任何 C 代码。
 
 ## 特性
 

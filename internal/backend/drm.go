@@ -42,6 +42,11 @@ type DRMConfig struct {
 	// one page flip in flight per CRTC, so this is headroom for the flip
 	// completion to land early rather than a latency win.
 	TripleBuffering bool
+
+	// Logf, when set, receives human-readable progress lines: the negotiated
+	// mode and the first flip's completion. A bare-metal bring-up that shows a
+	// black screen is far easier to diagnose with these than with silence.
+	Logf func(format string, args ...any)
 }
 
 // DRM drives one KMS connector. Frames arrive as a CPU-visible render
@@ -76,6 +81,12 @@ type DRM struct {
 	epfd   int
 	inputs []*inputDevice
 	in     Input
+
+	logger func(format string, args ...any)
+
+	// firstFlip records whether a page flip has completed yet, so the log says
+	// something once instead of on every frame.
+	firstFlip bool
 
 	// pointer/keyboard state accumulated between SYN_REPORT events
 	accX, accY       float64
@@ -151,6 +162,13 @@ func openDRMCard(in Input, cfg DRMConfig, path string) (*DRM, error) {
 		_ = dev.Close()
 	}()
 
+	// Atomic modesetting is opt-in per file descriptor. Without it the kernel
+	// reports CRTC MODE_ID/ACTIVE and the plane FB_ID/CRTC_ID/SRC_* properties
+	// as absent, which surfaces as "object N has no MODE_ID property" during
+	// the mode set. Universal planes is what makes every plane enumerable.
+	if err := dev.EnableAtomic(); err != nil {
+		return nil, fmt.Errorf("drm: %s does not support atomic modesetting: %w", path, err)
+	}
 	if !dev.DumbBufferSupported() {
 		return nil, fmt.Errorf("drm: %s does not support dumb buffers", path)
 	}
@@ -191,7 +209,7 @@ func openDRMCard(in Input, cfg DRMConfig, path string) (*DRM, error) {
 	b = &DRM{
 		dev: dev, conn: conn, crtc: crtc, plane: plane, mode: mode,
 		w: mode.Width(), h: mode.Height(),
-		in: in, queued: -1, epfd: -1,
+		in: in, queued: -1, epfd: -1, logger: cfg.Logf,
 	}
 
 	if err := b.allocateBuffers(cfg.TripleBuffering); err != nil {
@@ -286,6 +304,8 @@ func (b *DRM) modeset() error {
 		return fmt.Errorf("drm: modeset failed: %w", err)
 	}
 	b.scanout, b.queued = 0, -1
+	b.logf("%s: modeset %dx%d@%dmHz on %s (crtc %d, plane %d)",
+		b.dev.Path(), b.w, b.h, b.mode.RefreshMHz(), b.conn.Name(), b.crtc.ID, b.plane.ID)
 	return nil
 }
 
@@ -304,6 +324,10 @@ func (b *DRM) Present(fb *render.Framebuffer) error {
 	if fb.Width != b.w || fb.Height != b.h {
 		return nil
 	}
+	// Reap a completion that landed since the last poll. The event loop does
+	// this too, but doing it here keeps the ring from wedging for good if a
+	// wakeup is ever missed.
+	b.drainFlips()
 	if b.queued >= 0 {
 		return nil
 	}
@@ -394,6 +418,10 @@ func (b *DRM) drainFlips() {
 		}
 		if ev.Type == drm.EventFlipComplete && b.queued >= 0 && ev.UserData == b.flipSeq {
 			b.scanout, b.queued = b.queued, -1
+			if !b.firstFlip {
+				b.firstFlip = true
+				b.logf("%s: first page flip complete", b.dev.Path())
+			}
 		}
 	}
 }
@@ -403,6 +431,14 @@ func (b *DRM) fail(err error) {
 	if b.err == nil {
 		b.err = err
 	}
+}
+
+// logf emits a progress line when the caller supplied a logger.
+func (b *DRM) logf(format string, args ...any) {
+	if b.logger == nil {
+		return
+	}
+	b.logger("drm: "+format, args...)
 }
 
 // Size returns the active mode's resolution.

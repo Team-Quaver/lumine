@@ -133,6 +133,12 @@ func (c *Compositor) AddOutput(o *Output) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Outputs = append(c.Outputs, o)
+	// Park the pointer in the middle of the first output so a bare-metal
+	// session shows a cursor straight away instead of one pinned to (0, 0).
+	if len(c.Outputs) == 1 {
+		c.px = float64(o.W) / 2
+		c.py = float64(o.H) / 2
+	}
 	c.trees[o] = layout.New(c.Store.Config().Layout.Gap, c.Store.Config().Layout.ColumnRatio)
 	c.trees[o].ViewW = float64(o.W)
 	c.trees[o].ViewH = float64(o.H)
@@ -518,6 +524,14 @@ func (c *Compositor) Motion(dx, dy float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.movePointerLocked(c.px+dx, c.py+dy)
+}
+
+// Pointer reports the pointer's output-local position, rounded to whole
+// pixels. Backends composite the software cursor there.
+func (c *Compositor) Pointer() (int, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return int(c.px + 0.5), int(c.py + 0.5)
 }
 
 // MotionAbs moves the pointer to an absolute output-local position. Nested

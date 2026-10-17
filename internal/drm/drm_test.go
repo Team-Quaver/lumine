@@ -15,6 +15,7 @@ func TestRequestNumbers(t *testing.T) {
 		want uintptr
 	}{
 		{"GET_CAP", reqGetCap, 0xc010640c},
+		{"SET_CLIENT_CAP", reqSetClientCap, 0x4010640d},
 		{"SET_MASTER", reqSetMaster, 0x641e},
 		{"DROP_MASTER", reqDropMaster, 0x641f},
 		{"GEM_CLOSE", reqGemClose, 0x6409},
@@ -56,6 +57,7 @@ func TestStructSizes(t *testing.T) {
 		want uintptr
 	}{
 		{"getCap", unsafe.Sizeof(getCap{}), 16},
+		{"setClientCap", unsafe.Sizeof(setClientCap{}), 16},
 		{"primeHandle", unsafe.Sizeof(primeHandle{}), 16},
 		{"cardRes", unsafe.Sizeof(cardRes{}), 64},
 		{"modeInfo", unsafe.Sizeof(modeInfo{}), 68},

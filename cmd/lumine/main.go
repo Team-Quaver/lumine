@@ -97,14 +97,18 @@ func main() {
 	case "headless":
 		// nothing to bring up
 	case "drm":
-		d, err := backend.OpenDRM(comp, backend.DRMConfig{
+		drmCfg := backend.DRMConfig{
 			Device:          *drmDev,
 			Connector:       displayMonitor(disp),
 			Width:           displayWidth(disp),
 			Height:          displayHeight(disp),
 			RefreshMHz:      displayRefreshMHz(disp),
 			TripleBuffering: disp != nil && disp.TripleBuffering,
-		})
+		}
+		if *logLevel {
+			drmCfg.Logf = log.Printf
+		}
+		d, err := backend.OpenDRM(comp, drmCfg)
 		if err != nil {
 			log.Fatalf("lumine: %v", err)
 		}
@@ -124,6 +128,12 @@ func main() {
 
 	r, rendererName := newRenderer(*renderer, width, height)
 	out := &OutputRenderer{renderer: r, width: width, height: height}
+	// Bare-metal and headless outputs own the pointer, so Lumine draws it. A
+	// nested output sits inside another compositor that already shows a cursor,
+	// and compositing a second one would draw two.
+	if *backendK != "nested" {
+		out.pointer = comp.Pointer
+	}
 	if be != nil {
 		out.present = be.Present
 	}
@@ -278,9 +288,14 @@ func wait(be backend.Output, store *config.Store, d time.Duration) error {
 type OutputRenderer struct {
 	renderer render.Renderer
 	present  func(*render.Framebuffer) error
-	fb       *render.Framebuffer
-	width    int
-	height   int
+	// pointer reports the compositor's pointer position, which is where the
+	// software cursor is stamped into the finished frame.
+	pointer func() (int, int)
+	fb      *render.Framebuffer
+	width   int
+	height  int
+
+	lastPresentErr time.Time
 }
 
 // Resize reallocates the framebuffer for a new output size.
@@ -316,10 +331,33 @@ func (o *OutputRenderer) Draw(w, h int, items []compositor.DrawItem) error {
 	if err := o.renderer.Draw(o.fb, ritems); err != nil {
 		return err
 	}
+	// The cursor is composited after the renderer so it survives regardless of
+	// which renderer drew the frame and is never occluded by a full-screen
+	// client surface.
+	if o.pointer != nil {
+		px, py := o.pointer()
+		render.DrawCursor(o.fb, px, py, render.DefaultTheme().Cursor)
+	}
 	if o.present != nil {
-		return o.present(o.fb)
+		// A present failure used to be swallowed by the frame loop; surfacing
+		// it once is what turns a silent black output into a diagnosable one.
+		if err := o.present(o.fb); err != nil {
+			o.logPresentErr(err)
+			return err
+		}
 	}
 	return nil
+}
+
+// logPresentErr reports a backend present failure at most once a second, so a
+// persistent fault does not flood the log but is visible straight away.
+func (o *OutputRenderer) logPresentErr(err error) {
+	now := time.Now()
+	if now.Sub(o.lastPresentErr) < time.Second {
+		return
+	}
+	o.lastPresentErr = now
+	log.Printf("lumine: present: %v", err)
 }
 
 // SetColorSpace forwards the negotiated color state to the renderer.

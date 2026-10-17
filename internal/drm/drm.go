@@ -45,10 +45,14 @@ func io(nr uintptr) uintptr { return ioc(iocNone, drmIoctlBase, nr, 0) }
 // iowr encodes a DRM_IOWR(nr, T) request for a payload of the given size.
 func iowr(nr, size uintptr) uintptr { return ioc(iocRead|iocWrite, drmIoctlBase, nr, size) }
 
+// iow encodes a DRM_IOW(nr, T) request for a write-only payload.
+func iow(nr, size uintptr) uintptr { return ioc(iocWrite, drmIoctlBase, nr, size) }
+
 // Request numbers used by the compositor. The numeric values are asserted in
 // drm_test.go against <drm/drm.h>.
 var (
 	reqGetCap         = iowr(0x0c, unsafe.Sizeof(getCap{}))
+	reqSetClientCap   = iow(0x0d, unsafe.Sizeof(setClientCap{}))
 	reqSetMaster      = io(0x1e)
 	reqDropMaster     = io(0x1f)
 	reqPrimeToFD      = iowr(0x2d, unsafe.Sizeof(primeHandle{}))
@@ -79,6 +83,17 @@ var (
 const (
 	CapDumbBuffer uint64 = 0x2
 	CapPrime      uint64 = 0x7 // DRM_CAP_PRIME
+)
+
+// DRM_CLIENT_CAP_* capability ids for DRM_IOCTL_SET_CLIENT_CAP. The kernel
+// hides the atomic-only properties (CRTC MODE_ID/ACTIVE, plane FB_ID/CRTC_ID/
+// SRC_*) until DRM_CLIENT_CAP_ATOMIC is set, and only exposes the full plane
+// list once DRM_CLIENT_CAP_UNIVERSAL_PLANES is set.
+const (
+	ClientCapStereo3D        uint64 = 1
+	ClientCapUniversalPlanes uint64 = 2
+	ClientCapAtomic          uint64 = 3
+	ClientCapAspectRatio     uint64 = 4
 )
 
 // PRIME capability bits (the value returned for DRM_CAP_PRIME).
@@ -175,6 +190,28 @@ func (d *Device) GetCap(cap uint64) (uint64, error) {
 	return c.Value, nil
 }
 
+// SetClientCap opts this file descriptor into a DRM_CLIENT_CAP_* capability.
+// The value must be 0 or 1; the ioctl is rejected otherwise.
+func (d *Device) SetClientCap(cap, value uint64) error {
+	c := setClientCap{Capability: cap, Value: value}
+	if err := ioctl(d.fd, reqSetClientCap, unsafe.Pointer(&c)); err != nil {
+		return fmt.Errorf("drm: set client cap %d: %w", cap, err)
+	}
+	return nil
+}
+
+// EnableAtomic requests the capabilities atomic modesetting needs:
+// universal planes (so every plane and its properties are enumerated) and
+// atomic (so CRTCs expose MODE_ID/ACTIVE and planes expose FB_ID/CRTC_ID/
+// SRC_*). It must be called before enumerating resources; without it the
+// kernel reports the atomic properties as absent and the mode set fails.
+func (d *Device) EnableAtomic() error {
+	if err := d.SetClientCap(ClientCapUniversalPlanes, 1); err != nil {
+		return err
+	}
+	return d.SetClientCap(ClientCapAtomic, 1)
+}
+
 // DumbBufferSupported reports whether the device advertises dumb-buffer
 // allocation, the baseline requirement for the fallback scanout path.
 func (d *Device) DumbBufferSupported() bool {
@@ -215,6 +252,12 @@ func IsNotMaster(err error) bool {
 // drm_test.go asserts sizeof against the expected ioctl size field.
 
 type getCap struct {
+	Capability uint64
+	Value      uint64
+}
+
+// setClientCap is struct drm_set_client_cap, shared by any capability.
+type setClientCap struct {
 	Capability uint64
 	Value      uint64
 }

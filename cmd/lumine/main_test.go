@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -44,6 +45,38 @@ func TestOutputRendererResizeAllocatesInitialFramebuffer(t *testing.T) {
 	}
 	if r.draws != 1 {
 		t.Fatalf("renderer draws = %d, want 1", r.draws)
+	}
+}
+
+func TestOutputRendererStampsCursor(t *testing.T) {
+	r := &testRenderer{}
+	o := &OutputRenderer{renderer: r, width: 40, height: 30, pointer: func() (int, int) { return 5, 5 }}
+	o.Resize(40, 30)
+	if err := o.Draw(40, 30, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := o.fb.At(5, 5); got != render.DefaultTheme().Cursor {
+		t.Fatalf("cursor hotspot = %#x, want %#x", got, render.DefaultTheme().Cursor)
+	}
+
+	// Without a pointer source the frame must be left alone.
+	plain := &OutputRenderer{renderer: &testRenderer{}, width: 40, height: 30}
+	plain.Resize(40, 30)
+	if err := plain.Draw(40, 30, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := plain.fb.At(5, 5); got != 0 {
+		t.Fatalf("cursor drawn without a pointer source: %#x", got)
+	}
+}
+
+func TestOutputRendererSurfacesPresentError(t *testing.T) {
+	want := errors.New("flip rejected")
+	o := &OutputRenderer{renderer: &testRenderer{}, width: 16, height: 16}
+	o.Resize(16, 16)
+	o.present = func(*render.Framebuffer) error { return want }
+	if err := o.Draw(16, 16, nil); !errors.Is(err, want) {
+		t.Fatalf("Draw error = %v, want %v", err, want)
 	}
 }
 

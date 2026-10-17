@@ -33,6 +33,13 @@ func TestEnumerateHardware(t *testing.T) {
 			}
 			defer dev.Close()
 
+			// Opt in exactly like the backend does. This is a per-fd capability
+			// and does not alter display state, but it is what makes the CRTC
+			// MODE_ID/ACTIVE and plane FB_ID/CRTC_ID properties visible.
+			if err := dev.EnableAtomic(); err != nil {
+				t.Skipf("atomic modesetting unavailable on %s: %v", path, err)
+			}
+
 			res, err := dev.Resources()
 			if err != nil {
 				t.Fatalf("Resources: %v", err)
@@ -55,6 +62,12 @@ func TestEnumerateHardware(t *testing.T) {
 					t.Errorf("CRTC(%d): %v", id, err)
 					continue
 				}
+				if _, ok := crtc.Prop("MODE_ID"); !ok {
+					t.Errorf("CRTC(%d) lacks MODE_ID after atomic opt-in", id)
+				}
+				if _, ok := crtc.Prop("ACTIVE"); !ok {
+					t.Errorf("CRTC(%d) lacks ACTIVE after atomic opt-in", id)
+				}
 				t.Logf("crtc id=%d mode_valid=%v props=%d", crtc.ID, crtc.ModeValid, len(crtc.Props))
 			}
 			planes, err := dev.PlaneResources()
@@ -66,6 +79,12 @@ func TestEnumerateHardware(t *testing.T) {
 				if err != nil {
 					t.Errorf("Plane(%d): %v", id, err)
 					continue
+				}
+				if _, ok := p.Prop("FB_ID"); !ok {
+					t.Errorf("Plane(%d) lacks FB_ID after atomic opt-in", id)
+				}
+				if _, ok := p.Prop("CRTC_ID"); !ok {
+					t.Errorf("Plane(%d) lacks CRTC_ID after atomic opt-in", id)
 				}
 				t.Logf("plane id=%d formats=%d xrgb=%v props=%d",
 					p.ID, len(p.Formats), p.SupportsFormat(FourccXRGB8888), len(p.Props))
