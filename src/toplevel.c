@@ -100,9 +100,8 @@ static void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
 	}
 
 	if (server->grabbed_toplevel == toplevel) {
-		/* The dragged window went away mid-drag: also restore the
-		 * xcursor and grab node, not just the mode fields. */
-		lumine_cursor_reset(server);
+		server->grabbed_toplevel = NULL;
+		server->cursor_mode = LUMINE_CURSOR_PASSTHROUGH;
 	}
 	if (server->focused_toplevel == toplevel) {
 		server->focused_toplevel = NULL;
