@@ -20,8 +20,8 @@
 - **CSD 与 SSD 共存**：实现 `zxdg_decoration_manager_v1`。合成器默认绘制
   服务端装饰（标题栏 + 边框），客户端请求 CSD 时则完全不画，两种窗口可同时
   存在于同一输出。`[decor].mode` 控制服务端偏好，客户端最终决定。
-- **配置热重载**：TOML 配置，inotify 监听文件变化，编辑保存即生效（布局
-  模式 / 间距 / 列宽 / 色彩参数），无需重启，客户端不受影响。
+- **配置热重载**：INI 风格的 `.conf` 配置，inotify 监听文件变化，编辑保存即
+  生效（屏幕 / 布局 / 色彩 / WM 环境变量），无需重启，客户端不受影响。
 - **luminectl**：通过 Unix 控制套接字操作运行中的合成器（焦点、滚动、列
   移动、模式切换、关闭窗口、生成进程、强制重载、状态查询）。
 - **无 CGO**：`CGO_ENABLED=0 go build ./...` 可直接构建，产物是静态友好的
@@ -40,11 +40,11 @@ Lumine/
 │   ├── layout/           # tile（列 + 滚动）与 stack（浮动 z 序）算法
 │   ├── render/           # Framebuffer、CPU 渲染器、Vulkan 渲染器、色彩变换
 │   ├── backend/          # 嵌套 Wayland 后端（纯 Go Wayland 客户端）
-│   ├── config/           # TOML 配置 + inotify 热重载
+│   ├── config/           # .conf（类 ini）配置 + inotify 热重载
 │   ├── ipc/              # Unix socket 上的行式 JSON 控制协议
 │   └── shm/              # memfd / mmap / 像素解码
 ├── protocol/             # Wayland 协议 XML（生成 internal/wl 绑定的输入）
-└── config.example.toml   # 带注释的示例配置
+└── config.example.conf   # 带注释的示例配置
 ```
 
 ## 构建
@@ -68,16 +68,25 @@ CGO_ENABLED=0 go build ./...
 
 ## 运行
 
-Lumine 目前提供两个后端：
+Lumine 目前提供三个后端：
 
 - `nested`（默认）：作为一个 Wayland 客户端运行在现有合成器里，把帧提交为
   `wl_shm` 缓冲并转发父合成器的输入。需要父合成器的 `WAYLAND_DISPLAY`。
+- `drm`：直接驱动 DRM/KMS 连接器（裸机，无宿主合成器）。用 Vulkan 离屏渲染
+  后把结果拷进 DRM dumb buffer 并 page-flip 上屏，键盘/鼠标直接读
+  `/dev/input/event*`。需要一块未被其他合成器占用的空闲 VT。
 - `headless`：不连任何父合成器，仅在内存中渲染，适合测试。
 
 ```sh
 # 嵌套在现有会话中运行（父 WAYLAND_DISPLAY 指向当前桌面）：
 WAYLAND_DISPLAY=wayland-1 \
-  go run ./cmd/lumine -config ~/.config/lumine/config.toml
+  go run ./cmd/lumine -config ~/.config/lumine-wm/config.conf
+
+# 裸机 DRM/KMS（在空闲 VT 上运行；见下文 “DRM/KMS 后端”）：
+sudo ./lumine -backend drm
+
+# 指定显卡节点：
+./lumine -backend drm -drm-device /dev/dri/card0
 
 # 无头运行：
 go run ./cmd/lumine -backend headless -renderer cpu
@@ -90,13 +99,53 @@ go run ./cmd/lumine -renderer vulkan -size 1920x1080
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `-backend` | `nested` | `nested` 或 `headless` |
+| `-backend` | `nested` | `nested` / `drm` / `headless` |
 | `-renderer` | `auto` | `auto` / `vulkan` / `cpu`；Vulkan 不可用时回退 CPU |
 | `-socket` | `lumine-wayland` | Wayland socket 名或绝对路径 |
-| `-config` | `~/.config/lumine/config.toml` | TOML 配置路径 |
+| `-config` | `~/.config/lumine-wm/config.conf` | 配置文件路径（类 ini 的 `.conf`） |
 | `-terminal` | `$LUMINE_TERMINAL` 或 `kitty` | `spawn-terminal` 动作执行的命令 |
 | `-size` | `1280x720` | 嵌套窗口初始尺寸 |
+| `-drm-device` | 自动探测 | `-backend drm` 使用的卡节点，如 `/dev/dri/card0`；也接受 `LUMINE_DRM_DEVICE` / `WLR_DRM_DEVICES` |
 | `-verbose` | `false` | 打印渲染器与后端选择 |
+
+### DRM/KMS 后端（Vulkan + NVIDIA）
+
+`-backend drm` 走纯 Go 的 DRM/KMS ioctl（`internal/drm`），**不依赖 libdrm**，
+也没有 CGO。上屏流程刻意保持简单、可移植：
+
+1. 用现有 Vulkan 渲染器把整帧画进离屏 `B8G8R8A8_UNORM` 图像，再读回到 CPU
+   （`render.Framebuffer`）；
+2. 把这帧按行拷进一块 DRM **dumb buffer**（线性、可 mmap 的扫描缓冲）；
+3. 用 `DRM_IOCTL_MODE_PAGE_FLIP` 把它翻到 CRTC 上，`SYN_REPORT` 完成事件回
+   收缓冲。
+
+为什么不用 dma-buf 直接扫描（把 dumb buffer 作为 Vulkan 图像导入、GPU 直接写
+进去）：
+
+- i915 拒绝这种导入（`vkGetImageSubresourceLayout` 报 131584 > 131072 的分配
+  大小）；
+- NVIDIA 上 GPU 写进导入的 dma-buf 后，CPU 映射读回不保证一致。
+
+CPU 拷贝多花一点内存带宽，但在 Intel / AMD / NVIDIA 上都可靠，也让渲染器与输出
+后端解耦（CPU 渲染器同样能配 `-backend drm`）。
+
+**NVIDIA 支持**：`internal/render` 的 Vulkan 初始化会枚举物理设备，挑选第一个
+能离屏渲染 `B8G8R8A8_UNORM` 的设备；NVIDIA 的 Vulkan ICD（`nvidia` / 开源
+`nvidia-open` 内核模块）满足该条件，会被直接选中。DRM 侧则使用
+`nvidia-drm` 暴露的通用 KMS 接口（dumb buffer + page flip + atomic modeset），
+因此不依赖任何 NVIDIA 专有 API。混合显卡机器上可用 `-drm-device` 指定要让
+NVIDIA 还是集显承担扫描输出，两者都能工作。
+
+启动前需要：
+
+- 在**空闲 VT** 上运行（不要在当前图形会话里跑，否则 `drmSetMaster` 会因
+  "already mastered" 失败并给出提示）；
+- 对 `/dev/dri/card*` 与 `/dev/input/event*` 有读写权限（加入 `video` / `input`
+  组，或用 udev 规则 / root）。
+
+`-drm-device`、`LUMINE_DRM_DEVICE` 或 `WLR_DRM_DEVICES`（取第一项）可指定卡节点；
+连接器、分辨率、刷新率来自配置文件的 `[Display]` 段（`monitor` / `resolution` /
+`refresh-Rate`），留空则选第一个已连接的连接器和它的首选模式。
 
 ### 启动子客户端
 
@@ -115,32 +164,61 @@ WAYLAND_DISPLAY=wayland-1 go run ./cmd/lumine kitty
 
 ## 配置与热重载
 
-默认路径 `$XDG_CONFIG_HOME/lumine/config.toml`（即 `~/.config/lumine/config.toml`）。
-文件由 inotify 监听，保存后立即重新加载并应用到运行中的窗口。完整示例见
-[`config.example.toml`](./config.example.toml)：
+默认路径 `$XDG_CONFIG_HOME/lumine-wm/config.conf`
+（即 `~/.config/lumine-wm/config.conf`）。文件是 **INI 风格**：`;` 与 `#`
+开启注释，键名大小写不敏感，值可加引号。由 inotify 监听，保存后立即重新
+加载并应用到运行中的窗口。完整示例见
+[`config.example.conf`](./config.example.conf)。
 
-```toml
-[layout]
-mode = "tile"       # "tile" | "stack"
-gap = 8
-column_ratio = 0.5
+```ini
+[Display]
+monitor          = eDP-1
+resolution       = 2560x1440
+refresh-Rate     = highest      ; 或具体数值（Hz）
+color-managment  = icc          ; icc | edid | none
+icc-file         = "/path/to/panel.icc"
+main-monitor     = ""           ; true 表示该段是主屏
+hdr              = false
+triple-buffering = true
 
-[color]
-enabled = true
-transfer = "srgb"   # "srgb" | "pq" | "hlg"
-primaries = "srgb"  # "srgb" | "bt2020" | "dci-p3"
-max_luma = 400
+[auto-start]
+exec-once = fcitx5 -d
+exec-once = /usr/bin/fastfetch
 
-[decor]
-mode = "auto"       # "auto" | "ssd" | "csd"
+[wm-environment]
+GTK_THEME = Breeze
 
-[bindings]
+[keybinding]
 "super+t" = "mode-toggle"
 ```
 
+### 屏幕 / 分辨率
+
+- 每个输出写成一个 section。多屏使用 `[Display-1]` / `[Display-2]` / …，
+  **顺序越前，优先级越高**，最高优先级的一段即主输出；也可用
+  `main-monitor = true` 显式指定。
+- `monitor` 是连接器 / 输出名（如 `eDP-1`、`HDMI-A-1`），留空则使用后端默认输出。
+- `resolution` 形如 `2560x1440`，`auto` 表示沿用后端尺寸。嵌套后端下它只决定
+  宿主窗口的初始尺寸，无头后端下即最终输出尺寸。
+- `refresh-Rate` 可填 `highest` / `auto`，或 `144`、`59.94` 这样的数值。
+- `color-managment`（也接受正确拼写 `color-management`）取
+  `icc` / `edid` / `none`；`icc` 搭配 `icc-file`。
+- `hdr = true` 会把该输出切到 PQ / BT.2020；`triple-buffering` 作为渲染提示
+  保留给后续 DRM 后端。
+
+### 自启动与环境变量
+
+- `[auto-start]` 里可重复书写 `exec-once`，每条命令在 compositor 开始监听后
+  **只执行一次**（热重载不会重跑）。
+- `[wm-environment]` 的键值会导入进程环境，自启动命令、终端快捷键及所有
+  `spawn` 出来的客户端都会继承。
+
+### 说明
+
 - 缺失字段使用内置默认值；缺失文件不报错（等价于全默认配置）。
-- `[bindings]` 与默认绑定**合并**，只写想改的按键即可。
-- 热重载会应用布局模式、间距、列宽与色彩参数；绑定表变化在下一次按键时生效。
+- `[keybinding]` 与默认绑定**合并**，只写想改的按键即可；完整绑定语言后续
+  迭代再加入。
+- 热重载会应用屏幕 / 布局 / 色彩 / 环境变量；`exec-once` 与绑定表变化不重跑。
 - 也可用 `luminectl reload` 强制重载。
 
 ## 快捷键（Super = Logo）
@@ -155,7 +233,7 @@ mode = "auto"       # "auto" | "ssd" | "csd"
 | `Super+Shift+Left/Right` | `scroll-left/right` | 横向滚动词口 |
 | `Super+Q` | `close` | 关闭焦点窗口 |
 
-动作名即 `[bindings]` 里可填的值，与 `luminectl` 的语义一致。
+动作名即 `[keybinding]` 里可填的值，与 `luminectl` 的语义一致。
 
 ## luminectl
 
@@ -205,13 +283,14 @@ CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go test ./...
   buffer release → frame callback → keyboard keymap → SSD 几何）与
   `wp_color_manager_v1` 参数化描述的就绪路径。
 - `internal/layout`：列生成/聚焦/滚动/重排、模式往返、浮动窗口夹取。
-- `internal/config`：默认值、绑定合并、非法模式回退。
+- `internal/config`：`.conf` 解析、`[Display]` / 自启动 / 环境、绑定合并、
+  非法值回退与热重载。
 - `internal/render`：CPU 与 Vulkan 合成结果一致性。
 
 ## 已知限制（MVP 范围）
 
-- 仅有 `nested` 与 `headless` 后端，**尚未实现裸机 DRM/KMS**（因此 HDR 输出
-  元数据在真实面板上的路径也未落地）。
+- 裸机 DRM/KMS 后端已可用（`-backend drm`），但仍以单连接器为主；真实面板上的
+  HDR 输出元数据（`[Display].hdr` 目前只在合成阶段生效）尚未落地。
 - layer-shell / foreign-toplevel / screencopy / xdg_popup 的协议绑定已在
   `internal/wl` 生成，但尚未注册为全局对象，相关客户端暂不可用。
 - 指针拖拽/缩放未实现：`xdg_toplevel.move/resize` 为空操作，stack 模式窗口

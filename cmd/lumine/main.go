@@ -29,9 +29,10 @@ const frameInterval = time.Second / 60
 func main() {
 	var (
 		socket   = flag.String("socket", defaultSocketName(), "Wayland socket name or absolute path")
-		cfgPath  = flag.String("config", defaultConfigPath(), "TOML configuration path")
+		cfgPath  = flag.String("config", config.DefaultPath(), "configuration file path (.conf)")
 		terminal = flag.String("terminal", defaultTerminal(), "command bound to the terminal shortcut")
-		backendK = flag.String("backend", "nested", "output backend: nested | headless")
+		backendK = flag.String("backend", "nested", "output backend: nested | drm | headless")
+		drmDev   = flag.String("drm-device", "", "DRM card node for -backend drm (default: autodetect)")
 		size     = flag.String("size", "1280x720", "initial nested window size")
 		renderer = flag.String("renderer", "auto", "renderer: auto | vulkan | cpu")
 		logLevel = flag.Bool("verbose", false, "log renderer and backend selection")
@@ -56,6 +57,11 @@ func main() {
 	}
 	defer store.Close()
 
+	// The [wm-environment] table is exported into our own environment, so the
+	// compositor, autostart commands and every spawned client inherit it.
+	cfg := store.Config()
+	applyEnvironment(cfg.Environment)
+
 	srv, err := wl.NewServer(socketPath)
 	if err != nil {
 		log.Fatalf("lumine: listen on %s: %v", socketPath, err)
@@ -64,23 +70,56 @@ func main() {
 	comp := compositor.New(srv, store)
 	comp.SetTerminal(strings.Fields(*terminal))
 	comp.Spawn = func(argv []string) { spawn(displayName, socketPath, argv) }
-	store.Reload = comp.ApplyConfig
+	store.Reload = func(c *config.Config) {
+		applyEnvironment(c.Environment)
+		applyConfig(comp, c)
+	}
 	comp.RegisterGlobals()
 
-	// The nested backend is the MVP output: it renders into another
-	// compositor's window, so Lumine can be developed and tested everywhere.
+	// A configured [Display] decides the output's initial size and refresh
+	// rate; the nested backend still lets the host window resize it later.
+	// Multiple [Display-*] sections are ordered by priority, so the primary
+	// one is the section view used here.
+	disp := cfg.PrimaryDisplay()
+	if disp != nil && disp.Width > 0 && disp.Height > 0 {
+		width, height = disp.Width, disp.Height
+	}
+
+	// Three output backends share the same frame loop. "nested" renders into
+	// another compositor's window, "drm" drives a bare-metal KMS connector and
+	// "headless" presents nowhere (used by the control socket and tests).
 	var (
-		be     *backend.Backend
+		be     backend.Output
 		quit   atomic.Bool
 		closer = make(chan struct{})
 	)
-	if *backendK != "headless" {
-		be, err = backend.New(comp, width, height, "Lumine")
+	switch *backendK {
+	case "headless":
+		// nothing to bring up
+	case "drm":
+		d, err := backend.OpenDRM(comp, backend.DRMConfig{
+			Device:          *drmDev,
+			Connector:       displayMonitor(disp),
+			Width:           displayWidth(disp),
+			Height:          displayHeight(disp),
+			RefreshMHz:      displayRefreshMHz(disp),
+			TripleBuffering: disp != nil && disp.TripleBuffering,
+		})
 		if err != nil {
 			log.Fatalf("lumine: %v", err)
 		}
-		be.OnClose = func() { quit.Store(true) }
-		width, height = be.Size()
+		be = d
+		width, height = d.Size()
+	case "nested":
+		nb, err := backend.New(comp, width, height, "Lumine")
+		if err != nil {
+			log.Fatalf("lumine: %v", err)
+		}
+		nb.OnClose = func() { quit.Store(true) }
+		be = nb
+		width, height = nb.Size()
+	default:
+		log.Fatalf("lumine: unknown backend %q (want nested, drm or headless)", *backendK)
 	}
 
 	r, rendererName := newRenderer(*renderer, width, height)
@@ -89,13 +128,41 @@ func main() {
 		out.present = be.Present
 	}
 
+	// The DRM backend knows the connector it owns, so it overrides the nested
+	// defaults with the real output name and physical size.
+	var (
+		outName       = outputName(disp)
+		mmW     int32 = 500
+		mmH     int32 = 300
+		refresh       = refreshMHz(disp)
+	)
+	if d, ok := be.(backend.Describer); ok {
+		outName = d.OutputName()
+		if wmm, hmm := d.PhysicalSizeMM(); wmm > 0 && hmm > 0 {
+			mmW, mmH = wmm, hmm
+		}
+		if got := d.RefreshMHz(); got > 0 {
+			refresh = got
+		}
+	}
+
 	comp.AddOutput(&compositor.Output{
-		Name: "lumine-nested", W: width, H: height, Refresh: 60_000,
-		WidthMM: 500, HeightMM: 300, Renderer: out,
+		Name:            outName,
+		W:               width,
+		H:               height,
+		Refresh:         refresh,
+		WidthMM:         mmW,
+		HeightMM:        mmH,
+		Renderer:        out,
+		TripleBuffering: disp != nil && disp.TripleBuffering,
 	})
 	if err := comp.Listen(socketPath, "lumine"); err != nil {
 		log.Fatalf("lumine: control socket: %v", err)
 	}
+
+	// Apply the initial configuration: layout tuning, per-output color space
+	// (including any HDR request from [Display]) and the rest of the knobs.
+	applyConfig(comp, cfg)
 
 	// Any positional arguments are a command to launch once the compositor is
 	// listening; the child is pointed at Lumine's own socket.
@@ -103,8 +170,20 @@ func main() {
 		spawn(displayName, socketPath, argv)
 	}
 
+	// exec-once lines from [auto-start] run exactly once, after the socket is
+	// accepting connections so the clients can connect immediately.
+	for _, line := range cfg.AutoStart {
+		if argv := strings.Fields(line); len(argv) > 0 {
+			spawn(displayName, socketPath, argv)
+		}
+	}
+
 	if *logLevel {
-		log.Printf("lumine: display=%s socket=%s renderer=%s backend=%s", displayName, socketPath, rendererName, *backendK)
+		log.Printf("lumine: display=%s socket=%s renderer=%s backend=%s config=%s",
+			displayName, socketPath, rendererName, *backendK, *cfgPath)
+		log.Printf("lumine: output=%s %dx%d@%dmHz hdr=%v triple-buffering=%v autostart=%d",
+			outName, width, height, refresh,
+			disp != nil && disp.HDREnabled, disp != nil && disp.TripleBuffering, len(cfg.AutoStart))
 	}
 
 	// Signals and the host compositor closing our window both stop the loop.
@@ -129,18 +208,22 @@ func main() {
 	}
 }
 
-// run drives the compositor: parent events, config changes and frame ticks.
-func run(comp *compositor.Compositor, store *config.Store, be *backend.Backend, out *OutputRenderer, quit *atomic.Bool) {
+// run drives the compositor: backend events, config changes and frame ticks.
+func run(comp *compositor.Compositor, store *config.Store, be backend.Output, out *OutputRenderer, quit *atomic.Bool) {
 	next := time.Now()
 	for !quit.Load() {
 		next = next.Add(frameInterval)
 		if d := time.Until(next); d > 0 {
-			wait(be, store, d)
+			if err := wait(be, store, d); err != nil {
+				log.Printf("lumine: backend: %v", err)
+				quit.Store(true)
+				break
+			}
 		}
 		if be != nil {
-			if be.Conn().Closed() {
-				// The host compositor went away; there is nothing left to
-				// present into.
+			if be.Closed() {
+				// The host compositor went away, or the DRM device vanished;
+				// there is nothing left to present into.
 				quit.Store(true)
 				break
 			}
@@ -154,9 +237,9 @@ func run(comp *compositor.Compositor, store *config.Store, be *backend.Backend, 
 	}
 }
 
-// wait blocks until the frame deadline, waking early for parent input or a
-// configuration change.
-func wait(be *backend.Backend, store *config.Store, d time.Duration) {
+// wait blocks until the frame deadline, waking early for backend input or a
+// configuration change. The returned error is a fatal backend failure.
+func wait(be backend.Output, store *config.Store, d time.Duration) error {
 	fds := make([]unix.PollFd, 0, 2)
 	if int(store.FD()) >= 0 {
 		fds = append(fds, unix.PollFd{Fd: int32(store.FD()), Events: unix.POLLIN})
@@ -168,9 +251,11 @@ func wait(be *backend.Backend, store *config.Store, d time.Duration) {
 	if ms < 1 {
 		ms = 1
 	}
-	if _, err := unix.Poll(fds, ms); err != nil && err != syscall.EINTR {
-		log.Printf("lumine: poll: %v", err)
-		return
+	if _, err := unix.Poll(fds, ms); err != nil {
+		if err != syscall.EINTR {
+			return err
+		}
+		return nil
 	}
 	for i := range fds {
 		if fds[i].Revents == 0 {
@@ -180,11 +265,12 @@ func wait(be *backend.Backend, store *config.Store, d time.Duration) {
 		case int32(store.FD()) == fds[i].Fd:
 			store.OnReadable()
 		case be != nil && int32(be.FD()) == fds[i].Fd:
-			if err := be.Conn().OnReadable(); err != nil {
-				return
+			if err := be.Drain(); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
 }
 
 // OutputRenderer adapts a render.Renderer to compositor.Renderer: it owns the
@@ -291,6 +377,88 @@ func spawn(display, socketPath string, argv []string) {
 	}
 }
 
+// applyEnvironment exports the [wm-environment] entries into the process
+// environment. Because children inherit os.Environ, this covers autostart
+// commands, the terminal shortcut and luminectl-driven spawns alike.
+func applyEnvironment(env []string) {
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok && k != "" {
+			_ = os.Setenv(k, v)
+		}
+	}
+}
+
+// applyConfig folds a [Display] HDR request into the color settings and hands
+// the result to the compositor.
+func applyConfig(comp *compositor.Compositor, cfg *config.Config) {
+	foldDisplayHDR(cfg)
+	comp.ApplyConfig(cfg)
+}
+
+// foldDisplayHDR turns an HDR display into a PQ/BT.2020 output unless the
+// [color] section already asked for something explicit.
+func foldDisplayHDR(cfg *config.Config) {
+	d := cfg.PrimaryDisplay()
+	if d == nil || !d.HDREnabled {
+		return
+	}
+	cfg.Color.Enabled = true
+	if cfg.Color.TFName == "srgb" {
+		cfg.Color.TFName = "pq"
+	}
+	if cfg.Color.Primaries == "srgb" {
+		cfg.Color.Primaries = "bt2020"
+	}
+}
+
+// displayMonitor, displayWidth, displayHeight and displayRefreshMHz read the
+// primary [Display] section without forcing every caller to nil-check it.
+func displayMonitor(d *config.Display) string {
+	if d == nil {
+		return ""
+	}
+	return d.Monitor
+}
+
+func displayWidth(d *config.Display) int {
+	if d == nil {
+		return 0
+	}
+	return d.Width
+}
+
+func displayHeight(d *config.Display) int {
+	if d == nil {
+		return 0
+	}
+	return d.Height
+}
+
+func displayRefreshMHz(d *config.Display) int32 {
+	if d == nil {
+		return 0
+	}
+	return d.RefreshMHz
+}
+
+// outputName picks the wl_output name: the connector from [Display].monitor,
+// falling back to the built-in nested name.
+func outputName(disp *config.Display) string {
+	if disp != nil && disp.Monitor != "" {
+		return disp.Monitor
+	}
+	return "lumine-nested"
+}
+
+// refreshMHz returns the configured refresh rate in mHz, defaulting to 60 Hz
+// when the display asks for the highest available (or none is configured).
+func refreshMHz(disp *config.Display) int32 {
+	if disp != nil && disp.RefreshMHz > 0 {
+		return disp.RefreshMHz
+	}
+	return 60_000
+}
+
 func parseSize(s string) (int, int) {
 	var w, h int
 	if _, err := fmt.Sscanf(s, "%dx%d", &w, &h); err != nil || w <= 0 || h <= 0 {
@@ -308,18 +476,6 @@ func runtimeDir() string {
 
 func defaultSocketName() string {
 	return "lumine-wayland"
-}
-
-func defaultConfigPath() string {
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "lumine.toml"
-		}
-		base = filepath.Join(home, ".config")
-	}
-	return filepath.Join(base, "lumine", "config.toml")
 }
 
 func defaultTerminal() string {

@@ -1,6 +1,8 @@
-// Package config loads Lumine's TOML configuration and watches it for
-// changes. Hot reload is inotify-based: edits fire the Reload hook, the
-// compositor re-reads and re-applies without restarting clients.
+// Package config loads Lumine's window-manager configuration and watches it
+// for changes. The on-disk format is an INI-like ".conf" file, normally at
+// $XDG_CONFIG_HOME/lumine-wm/config.conf. Hot reload is inotify-based: edits
+// fire the Reload hook and the compositor re-reads and re-applies the new
+// values without restarting clients.
 package config
 
 import (
@@ -8,41 +10,91 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/BurntSushi/toml"
 	"golang.org/x/sys/unix"
 )
+
+// ColorManagement is one of the [Display].color-management values.
+type ColorManagement string
+
+const (
+	ColorManagementNone ColorManagement = "none" // no profile
+	ColorManagementEDID ColorManagement = "edid" // use the monitor's EDID
+	ColorManagementICC  ColorManagement = "icc"  // use icc-file
+)
+
+// Display describes one output, written as a [Display] / [Display-1] /
+// [Display-2] section. Sections are kept in file order, which is also the
+// priority order: the earlier a section appears, the higher its priority, and
+// the first one is the main output unless another is marked with main-monitor.
+type Display struct {
+	Section string // section name, e.g. "Display" or "Display-1"
+
+	Monitor    string // connector/output name, e.g. eDP-1 ("" = any)
+	Resolution string // "1920x1080" or "" for the backend default
+	Width      int    // parsed from Resolution, 0 when unset
+	Height     int    // parsed from Resolution, 0 when unset
+
+	// RefreshRate keeps the raw text ("highest" or a number); RefreshMHz is
+	// the parsed value in mHz (0 means "let the backend decide the highest").
+	RefreshRate string
+	RefreshMHz  int32
+
+	ColorManagement ColorManagement
+	ICCFile         string
+
+	// MainMonitor is the raw main-monitor value. Main is true when this
+	// display is explicitly the primary one (main-monitor = true, or its
+	// monitor name matches the main-monitor string).
+	MainMonitor string
+	Main        bool
+
+	HDR             string // raw value: "", "true"/"on", "false"/"off"
+	HDREnabled      bool
+	TripleBuffering bool
+}
 
 // Config is the full on-disk configuration.
 type Config struct {
 	Layout struct {
-		Mode        string  `toml:"mode"`         // "tile" | "stack"
-		Gap         float64 `toml:"gap"`          // px between windows
-		ColumnRatio float64 `toml:"column_ratio"` // column width as fraction of output width
-	} `toml:"layout"`
+		Mode        string  // "tile" | "stack"
+		Gap         float64 // px between windows
+		ColumnRatio float64 // column width as a fraction of the output width
+	}
 
 	Input struct {
-		XkbLayout string `toml:"xkb_layout"` // advertised keymap name (us layout used)
+		XkbLayout string // advertised keymap layout name (us layout used)
 		Repeat    struct {
-			Delay int `toml:"delay"` // ms
-			Rate  int `toml:"rate"`  // chars/sec
-		} `toml:"repeat"`
-	} `toml:"input"`
+			Delay int // ms
+			Rate  int // chars/sec
+		}
+	}
 
 	Color struct {
-		Enabled   bool   `toml:"enabled"`   // expose wp_color_management
-		TFName    string `toml:"transfer"`  // "srgb" | "pq" | "hlg"
-		Primaries string `toml:"primaries"` // "srgb" | "bt2020" | "dci-p3"
-		MaxLuma   uint32 `toml:"max_luma"`  // nits, HDR output
-	} `toml:"color"`
+		Enabled   bool   // expose wp_color_management
+		TFName    string // "srgb" | "pq" | "hlg"
+		Primaries string // "srgb" | "bt2020" | "dci-p3"
+		MaxLuma   uint32 // nits, HDR output
+	}
 
 	Decor struct {
-		Mode string `toml:"mode"` // "auto" | "ssd" | "csd" — server pref, clients may override
-	} `toml:"decor"`
+		Mode string // "auto" | "ssd" | "csd" — server pref, clients may override
+	}
 
-	Bindings map[string]string `toml:"bindings"` // "super+left": "focus-left"
+	Bindings map[string]string // "super+left": "focus-left"
+
+	// Displays are the [Display*] sections in priority order.
+	Displays []Display
+
+	// AutoStart is the list of exec-once commands from [auto-start].
+	AutoStart []string
+
+	// Environment is the [wm-environment] table flattened into ordered
+	// "KEY=VALUE" entries, applied to the compositor and everything it spawns.
+	Environment []string
 }
 
 // Default returns the built-in configuration.
@@ -74,6 +126,47 @@ func Default() *Config {
 	return c
 }
 
+// DefaultPath returns the config path Lumine uses when none is given:
+// $XDG_CONFIG_HOME/lumine-wm/config.conf, falling back to ~/.config.
+func DefaultPath() string {
+	base := os.Getenv("XDG_CONFIG_HOME")
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "lumine-wm.conf"
+		}
+		base = filepath.Join(home, ".config")
+	}
+	return filepath.Join(base, "lumine-wm", "config.conf")
+}
+
+// PrimaryDisplay returns the display that should be treated as the main
+// output: the one explicitly marked main, otherwise the first section (which,
+// by the priority rule, is the highest-priority one). It returns nil when no
+// display is configured.
+func (c *Config) PrimaryDisplay() *Display {
+	for i := range c.Displays {
+		if c.Displays[i].Main {
+			return &c.Displays[i]
+		}
+	}
+	if len(c.Displays) > 0 {
+		return &c.Displays[0]
+	}
+	return nil
+}
+
+// DisplayFor returns the display section configured for the given monitor
+// name, or nil when none matches.
+func (c *Config) DisplayFor(monitor string) *Display {
+	for i := range c.Displays {
+		if c.Displays[i].Monitor != "" && strings.EqualFold(c.Displays[i].Monitor, monitor) {
+			return &c.Displays[i]
+		}
+	}
+	return nil
+}
+
 // Store owns the active config and its file watcher.
 type Store struct {
 	mu   sync.Mutex
@@ -88,7 +181,11 @@ type Store struct {
 	base  string
 }
 
-// Load reads path, falling back to defaults for missing fields.
+// Path returns the file the store is watching.
+func (s *Store) Path() string { return s.path }
+
+// Load reads path, falling back to defaults for missing fields. A missing file
+// is not an error: it means "all defaults".
 func Load(path string) (*Config, error) {
 	cfg := Default()
 	data, err := os.ReadFile(path)
@@ -98,13 +195,274 @@ func Load(path string) (*Config, error) {
 		}
 		return nil, err
 	}
-	if _, err := toml.Decode(string(data), cfg); err != nil {
-		return nil, fmt.Errorf("config: %w", err)
+	doc, err := parseINI(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("config %s: %w", path, err)
 	}
-	if cfg.Layout.Mode != "tile" && cfg.Layout.Mode != "stack" {
-		cfg.Layout.Mode = "tile"
+	if err := cfg.apply(doc); err != nil {
+		return nil, fmt.Errorf("config %s: %w", path, err)
 	}
+	cfg.normalize()
 	return cfg, nil
+}
+
+// apply folds a parsed document into cfg. Only the sections and keys that are
+// present are touched, so unspecified values keep their defaults.
+func (c *Config) apply(doc *ini) error {
+	for _, sec := range doc.sections {
+		name := strings.ToLower(sec.name)
+		switch {
+		case name == "layout":
+			if v, ok := sec.get("mode"); ok {
+				c.Layout.Mode = v
+			}
+			if v, ok := sec.first("gap"); ok {
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					c.Layout.Gap = f
+				} else {
+					return sec.err("gap", v, err)
+				}
+			}
+			if v, ok := sec.first("column-ratio", "column_ratio"); ok {
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					c.Layout.ColumnRatio = f
+				} else {
+					return sec.err("column-ratio", v, err)
+				}
+			}
+		case name == "input":
+			if v, ok := sec.first("xkb-layout", "xkb_layout"); ok {
+				c.Input.XkbLayout = v
+			}
+		case name == "input.repeat":
+			if v, ok := sec.get("delay"); ok {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return sec.err("delay", v, err)
+				}
+				c.Input.Repeat.Delay = n
+			}
+			if v, ok := sec.get("rate"); ok {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return sec.err("rate", v, err)
+				}
+				c.Input.Repeat.Rate = n
+			}
+		case name == "color":
+			if v, ok := sec.get("enabled"); ok {
+				c.Color.Enabled = parseBool(v)
+			}
+			if v, ok := sec.first("transfer", "tf"); ok {
+				c.Color.TFName = strings.ToLower(v)
+			}
+			if v, ok := sec.get("primaries"); ok {
+				c.Color.Primaries = strings.ToLower(v)
+			}
+			if v, ok := sec.first("max-luma", "max_luma"); ok {
+				n, err := strconv.ParseUint(v, 10, 32)
+				if err != nil {
+					return sec.err("max-luma", v, err)
+				}
+				c.Color.MaxLuma = uint32(n)
+			}
+		case name == "decor":
+			if v, ok := sec.get("mode"); ok {
+				c.Decor.Mode = v
+			}
+		case name == "keybinding" || name == "bindings":
+			for _, p := range sec.pairs {
+				c.Bindings[p.key] = p.value
+			}
+		case name == "auto-start" || name == "autostart":
+			c.AutoStart = append(c.AutoStart, sec.all("exec-once")...)
+		case name == "wm-environment":
+			// Environment variables are case-sensitive on Linux, so keep the
+			// key exactly as written (only the lookup key is lower-cased).
+			for _, p := range sec.pairs {
+				c.Environment = append(c.Environment, p.raw+"="+p.value)
+			}
+		case isDisplaySection(name):
+			d, err := parseDisplay(sec)
+			if err != nil {
+				return err
+			}
+			c.Displays = append(c.Displays, d)
+		default:
+			return fmt.Errorf("unknown section [%s]", sec.name)
+		}
+	}
+	return nil
+}
+
+// isDisplaySection reports whether a section name is a display entry:
+// [Display], [Display-1], [Display-2], ... Only a separator after the prefix
+// counts, so a stray [displays] is reported as unknown instead of quietly
+// being read as a monitor.
+func isDisplaySection(name string) bool {
+	const prefix = "display"
+	if name == prefix {
+		return true
+	}
+	if !strings.HasPrefix(name, prefix) {
+		return false
+	}
+	switch name[len(prefix)] {
+	case '-', '_', '.', ' ', ':', '/':
+		return true
+	}
+	return false
+}
+
+// normalize clamps values to supported choices so a typo cannot wedge the
+// compositor.
+func (c *Config) normalize() {
+	if c.Layout.Mode != "tile" && c.Layout.Mode != "stack" {
+		c.Layout.Mode = "tile"
+	}
+	switch c.Decor.Mode {
+	case "auto", "ssd", "csd":
+	default:
+		c.Decor.Mode = "auto"
+	}
+	switch c.Color.TFName {
+	case "srgb", "pq", "hlg", "linear":
+	default:
+		c.Color.TFName = "srgb"
+	}
+	switch c.Color.Primaries {
+	case "srgb", "bt2020", "dci-p3":
+	default:
+		c.Color.Primaries = "srgb"
+	}
+}
+
+// parseDisplay maps one [Display] section onto a Display.
+func parseDisplay(sec *iniSection) (Display, error) {
+	d := Display{Section: sec.name}
+
+	if v, ok := sec.first("monitor", "output"); ok {
+		d.Monitor = v
+	}
+
+	if v, ok := sec.first("resolution", "mode"); ok && v != "" && !strings.EqualFold(v, "auto") {
+		w, h, err := parseResolution(v)
+		if err != nil {
+			return d, sec.err("resolution", v, err)
+		}
+		d.Resolution, d.Width, d.Height = v, w, h
+	}
+
+	if v, ok := sec.first("refresh-rate", "refresh_rate", "refreshrate", "refresh"); ok {
+		d.RefreshRate = v
+		if !isAuto(v) {
+			hz, err := strconv.ParseFloat(strings.TrimSuffix(strings.ToLower(v), "hz"), 64)
+			if err != nil {
+				return d, sec.err("refresh-rate", v, err)
+			}
+			d.RefreshMHz = int32(hz * 1000)
+		}
+	}
+
+	if v, ok := sec.first("color-management", "color-managment", "color_management"); ok {
+		switch strings.ToLower(v) {
+		case "", "none", "off", "false":
+			d.ColorManagement = ColorManagementNone
+		case "edid":
+			d.ColorManagement = ColorManagementEDID
+		case "icc":
+			d.ColorManagement = ColorManagementICC
+		default:
+			return d, fmt.Errorf("line %d: color-management = %q, want icc | edid | none", sec.lineOf("color-management", "color-managment", "color_management"), v)
+		}
+	}
+
+	if v, ok := sec.first("icc-file", "icc_file"); ok {
+		d.ICCFile = v
+	}
+
+	if v, ok := sec.first("main-monitor", "main_monitor", "main"); ok {
+		d.MainMonitor = v
+		switch strings.ToLower(v) {
+		case "true", "yes", "on", "1":
+			d.Main = true
+		case "false", "no", "off", "0", "":
+			// Nothing: the first section stays the implicit main output.
+		default:
+			// A name: treat it as "this monitor is the main one" when it names
+			// this section's own monitor.
+			d.Main = d.Monitor != "" && strings.EqualFold(v, d.Monitor)
+		}
+	}
+
+	if v, ok := sec.first("hdr"); ok {
+		d.HDR = v
+		switch strings.ToLower(v) {
+		case "true", "yes", "on", "1", "hdr":
+			d.HDREnabled = true
+		default:
+			d.HDREnabled = false
+		}
+	}
+
+	if v, ok := sec.first("triple-buffering", "triple_buffering", "triplebuffering"); ok {
+		d.TripleBuffering = parseBool(v)
+	}
+
+	return d, nil
+}
+
+// parseResolution parses "1920x1080". "×" and "X" are accepted too.
+func parseResolution(v string) (int, int, error) {
+	s := strings.ReplaceAll(strings.ToLower(v), "×", "x")
+	parts := strings.SplitN(s, "x", 2)
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("want WIDTHxHEIGHT")
+	}
+	w, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || w <= 0 {
+		return 0, 0, fmt.Errorf("bad width")
+	}
+	h, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil || h <= 0 {
+		return 0, 0, fmt.Errorf("bad height")
+	}
+	return w, h, nil
+}
+
+// isAuto reports whether a refresh-rate value means "pick the highest".
+func isAuto(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "auto", "highest", "max", "maximum":
+		return true
+	}
+	return false
+}
+
+// parseBool accepts the usual hand-written truthy/falsey spellings.
+func parseBool(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "yes", "on", "1", "enabled", "enable":
+		return true
+	}
+	return false
+}
+
+func (s *iniSection) err(key, value string, cause error) error {
+	return fmt.Errorf("line %d: %s = %q: %v", s.lineOf(key), key, value, cause)
+}
+
+func (s *iniSection) lineOf(keys ...string) int {
+	want := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		want[strings.ToLower(k)] = true
+	}
+	for _, p := range s.pairs {
+		if want[p.key] {
+			return p.line
+		}
+	}
+	return 0
 }
 
 // NewStore loads path and starts watching it.

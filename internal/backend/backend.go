@@ -159,6 +159,13 @@ func (b *Backend) Conn() *wl.Conn { return b.conn }
 // FD returns the parent socket fd for the event loop.
 func (b *Backend) FD() int { return b.conn.FD() }
 
+// Drain forwards the poll wakeup to the parent connection, dispatching every
+// queued Wayland event. It never blocks.
+func (b *Backend) Drain() error { return b.conn.OnReadable() }
+
+// Closed reports whether the host compositor disconnected us.
+func (b *Backend) Closed() bool { return b.conn.Closed() }
+
 // Present copies the composited framebuffer into a shm buffer and commits it.
 func (b *Backend) Present(fb *render.Framebuffer) error {
 	if fb == nil {

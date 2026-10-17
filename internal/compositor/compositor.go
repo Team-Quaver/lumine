@@ -53,6 +53,11 @@ type Output struct {
 	Global   *wl.Global
 	Make     string
 	Model    string
+
+	// TripleBuffering records the [Display].triple-buffering request. The MVP
+	// renderers present one buffer per frame, so this is a hint carried for
+	// the future DRM backend rather than something honoured today.
+	TripleBuffering bool
 }
 
 // Compositor owns all shared state.

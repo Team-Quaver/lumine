@@ -284,7 +284,7 @@ func startHarness(t *testing.T) (string, *captureRenderer, *compositor.Composito
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 	sock := filepath.Join(dir, "lumine-test")
 
-	store, err := config.NewStore(filepath.Join(dir, "config.toml"))
+	store, err := config.NewStore(filepath.Join(dir, "config.conf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +769,7 @@ func TestColorManagerParametric(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 	sock := filepath.Join(dir, "lumine-color")
 
-	store, err := config.NewStore(filepath.Join(dir, "config.toml"))
+	store, err := config.NewStore(filepath.Join(dir, "config.conf"))
 	if err != nil {
 		t.Fatal(err)
 	}
