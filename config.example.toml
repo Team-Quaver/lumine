@@ -1,0 +1,42 @@
+# Lumine example configuration.
+# Copy to $XDG_CONFIG_HOME/lumine/config.toml (usually ~/.config/lumine/config.toml).
+# The file is watched with inotify: saving it applies the new values live.
+
+[layout]
+# "tile"  = niri-style horizontal strip of vertical columns (infinite scroll)
+# "stack" = free-floating, z-ordered windows
+mode = "tile"
+gap = 8            # px between columns / windows
+column_ratio = 0.5 # column width as a fraction of the output width
+
+[input]
+xkb_layout = "us"  # advertised keymap layout name
+
+[input.repeat]
+delay = 300        # ms before a held key repeats
+rate = 25          # repeats per second
+
+[color]
+enabled = true     # expose wp_color_manager_v1 to clients
+transfer = "srgb"  # output transfer function: "srgb" | "pq" | "hlg"
+primaries = "srgb" # output primaries: "srgb" | "bt2020" | "dci-p3"
+max_luma = 400     # peak output luminance in nits (HDR)
+
+[decor]
+# Server-side decoration preference. Clients may still request CSD and win.
+mode = "auto"      # "auto" | "ssd" | "csd"
+
+# Keybindings. Values name a compositor action; the table is merged with the
+# built-in defaults, so you only list the ones you want to change.
+[bindings]
+"super+left" = "focus-left"
+"super+right" = "focus-right"
+"super+up" = "focus-up"
+"super+down" = "focus-down"
+"super+shift+left" = "scroll-left"
+"super+shift+right" = "scroll-right"
+"super+shift+j" = "move-left"
+"super+shift+k" = "move-right"
+"super+t" = "mode-toggle"
+"super+q" = "close"
+"super+return" = "spawn-terminal"
