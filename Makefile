@@ -7,6 +7,7 @@ GO      ?= go
 BIN     := bin
 LUMINE  := $(BIN)/lumine
 CTL     := $(BIN)/luminectl
+GO_SOURCES := $(shell find cmd internal -type f -name '*.go' 2>/dev/null)
 
 .DEFAULT_GOAL := build
 
@@ -17,10 +18,10 @@ all: build
 ## build: compile both binaries into ./bin
 build: $(LUMINE) $(CTL)
 
-$(LUMINE):
+$(LUMINE): $(GO_SOURCES) go.mod go.sum
 	$(GO) build -o $@ ./cmd/lumine
 
-$(CTL):
+$(CTL): $(GO_SOURCES) go.mod go.sum
 	$(GO) build -o $@ ./cmd/luminectl
 
 ## run: build and run the compositor (set ARGS="..." to pass flags)

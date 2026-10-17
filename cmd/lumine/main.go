@@ -199,7 +199,10 @@ type OutputRenderer struct {
 
 // Resize reallocates the framebuffer for a new output size.
 func (o *OutputRenderer) Resize(w, h int) {
-	if w <= 0 || h <= 0 || (w == o.width && h == o.height) {
+	if w <= 0 || h <= 0 {
+		return
+	}
+	if o.fb != nil && w == o.width && h == o.height {
 		return
 	}
 	o.width, o.height = w, h

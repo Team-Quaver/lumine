@@ -58,6 +58,10 @@ go build ./cmd/lumine ./cmd/luminectl
 CGO_ENABLED=0 go build ./...
 ```
 
+> 仓库根目录没有 `.go` 文件，因此不要执行 `go build .` 或 `go run .`。
+> 使用 `make build` 构建到 `./bin`，使用 `make run ARGS="..."` 启动，或者
+> 明确指定包路径，例如 `go run ./cmd/lumine ...`。
+
 > 说明：`go list -deps` 会列出 `purego/internal/cgo` 包，这是 purego 的源码
 > 布局，编译时在 `CGO_ENABLED=0` 下走纯 Go 的 `dlopen` 分支，不会产生 CGO
 > 依赖。用 `CGO_ENABLED=0` 构建即可确认。
