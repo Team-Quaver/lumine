@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zwpIdleInhibitManagerV1Iface = &Interface{
 	Name:    "zwp_idle_inhibit_manager_v1",
 	Version: 1,

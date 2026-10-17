@@ -4,13 +4,13 @@ package wl
 
 // XdgWmBaseError values.
 const (
-	XdgWmBaseErrorDefunctSurfaces = 1
-	XdgWmBaseErrorInvalidPopupParent = 3
-	XdgWmBaseErrorInvalidPositioner = 5
+	XdgWmBaseErrorDefunctSurfaces     = 1
+	XdgWmBaseErrorInvalidPopupParent  = 3
+	XdgWmBaseErrorInvalidPositioner   = 5
 	XdgWmBaseErrorInvalidSurfaceState = 4
-	XdgWmBaseErrorNotTheTopmostPopup = 2
-	XdgWmBaseErrorRole = 0
-	XdgWmBaseErrorUnresponsive = 6
+	XdgWmBaseErrorNotTheTopmostPopup  = 2
+	XdgWmBaseErrorRole                = 0
+	XdgWmBaseErrorUnresponsive        = 6
 )
 
 var xdgWmBaseIface = &Interface{
@@ -116,43 +116,47 @@ func (o *XdgWmBase) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // XdgPositionerError values.
 const (
 	XdgPositionerErrorInvalidInput = 0
 )
+
 // XdgPositionerAnchor values.
 const (
-	XdgPositionerAnchorBottom = 2
-	XdgPositionerAnchorBottomLeft = 6
+	XdgPositionerAnchorBottom      = 2
+	XdgPositionerAnchorBottomLeft  = 6
 	XdgPositionerAnchorBottomRight = 8
-	XdgPositionerAnchorLeft = 3
-	XdgPositionerAnchorNone = 0
-	XdgPositionerAnchorRight = 4
-	XdgPositionerAnchorTop = 1
-	XdgPositionerAnchorTopLeft = 5
-	XdgPositionerAnchorTopRight = 7
+	XdgPositionerAnchorLeft        = 3
+	XdgPositionerAnchorNone        = 0
+	XdgPositionerAnchorRight       = 4
+	XdgPositionerAnchorTop         = 1
+	XdgPositionerAnchorTopLeft     = 5
+	XdgPositionerAnchorTopRight    = 7
 )
+
 // XdgPositionerGravity values.
 const (
-	XdgPositionerGravityBottom = 2
-	XdgPositionerGravityBottomLeft = 6
+	XdgPositionerGravityBottom      = 2
+	XdgPositionerGravityBottomLeft  = 6
 	XdgPositionerGravityBottomRight = 8
-	XdgPositionerGravityLeft = 3
-	XdgPositionerGravityNone = 0
-	XdgPositionerGravityRight = 4
-	XdgPositionerGravityTop = 1
-	XdgPositionerGravityTopLeft = 5
-	XdgPositionerGravityTopRight = 7
+	XdgPositionerGravityLeft        = 3
+	XdgPositionerGravityNone        = 0
+	XdgPositionerGravityRight       = 4
+	XdgPositionerGravityTop         = 1
+	XdgPositionerGravityTopLeft     = 5
+	XdgPositionerGravityTopRight    = 7
 )
+
 // XdgPositionerConstraintAdjustment values.
 const (
-	XdgPositionerConstraintAdjustmentFlipX = 4
-	XdgPositionerConstraintAdjustmentFlipY = 8
-	XdgPositionerConstraintAdjustmentNone = 0
+	XdgPositionerConstraintAdjustmentFlipX   = 4
+	XdgPositionerConstraintAdjustmentFlipY   = 8
+	XdgPositionerConstraintAdjustmentNone    = 0
 	XdgPositionerConstraintAdjustmentResizeX = 16
 	XdgPositionerConstraintAdjustmentResizeY = 32
-	XdgPositionerConstraintAdjustmentSlideX = 1
-	XdgPositionerConstraintAdjustmentSlideY = 2
+	XdgPositionerConstraintAdjustmentSlideX  = 1
+	XdgPositionerConstraintAdjustmentSlideY  = 2
 )
 
 var xdgPositionerIface = &Interface{
@@ -310,13 +314,14 @@ func (o *XdgPositioner) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // XdgSurfaceError values.
 const (
 	XdgSurfaceErrorAlreadyConstructed = 2
-	XdgSurfaceErrorDefunctRoleObject = 6
-	XdgSurfaceErrorInvalidSerial = 4
-	XdgSurfaceErrorInvalidSize = 5
-	XdgSurfaceErrorNotConstructed = 1
+	XdgSurfaceErrorDefunctRoleObject  = 6
+	XdgSurfaceErrorInvalidSerial      = 4
+	XdgSurfaceErrorInvalidSize        = 5
+	XdgSurfaceErrorNotConstructed     = 1
 	XdgSurfaceErrorUnconfiguredBuffer = 3
 )
 
@@ -439,45 +444,49 @@ func (o *XdgSurface) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // XdgToplevelError values.
 const (
-	XdgToplevelErrorInvalidParent = 1
+	XdgToplevelErrorInvalidParent     = 1
 	XdgToplevelErrorInvalidResizeEdge = 0
-	XdgToplevelErrorInvalidSize = 2
+	XdgToplevelErrorInvalidSize       = 2
 )
+
 // XdgToplevelResizeEdge values.
 const (
-	XdgToplevelResizeEdgeBottom = 2
-	XdgToplevelResizeEdgeBottomLeft = 6
+	XdgToplevelResizeEdgeBottom      = 2
+	XdgToplevelResizeEdgeBottomLeft  = 6
 	XdgToplevelResizeEdgeBottomRight = 10
-	XdgToplevelResizeEdgeLeft = 4
-	XdgToplevelResizeEdgeNone = 0
-	XdgToplevelResizeEdgeRight = 8
-	XdgToplevelResizeEdgeTop = 1
-	XdgToplevelResizeEdgeTopLeft = 5
-	XdgToplevelResizeEdgeTopRight = 9
+	XdgToplevelResizeEdgeLeft        = 4
+	XdgToplevelResizeEdgeNone        = 0
+	XdgToplevelResizeEdgeRight       = 8
+	XdgToplevelResizeEdgeTop         = 1
+	XdgToplevelResizeEdgeTopLeft     = 5
+	XdgToplevelResizeEdgeTopRight    = 9
 )
+
 // XdgToplevelState values.
 const (
-	XdgToplevelStateActivated = 4
+	XdgToplevelStateActivated         = 4
 	XdgToplevelStateConstrainedBottom = 13
-	XdgToplevelStateConstrainedLeft = 10
-	XdgToplevelStateConstrainedRight = 11
-	XdgToplevelStateConstrainedTop = 12
-	XdgToplevelStateFullscreen = 2
-	XdgToplevelStateMaximized = 1
-	XdgToplevelStateResizing = 3
-	XdgToplevelStateSuspended = 9
-	XdgToplevelStateTiledBottom = 8
-	XdgToplevelStateTiledLeft = 5
-	XdgToplevelStateTiledRight = 6
-	XdgToplevelStateTiledTop = 7
+	XdgToplevelStateConstrainedLeft   = 10
+	XdgToplevelStateConstrainedRight  = 11
+	XdgToplevelStateConstrainedTop    = 12
+	XdgToplevelStateFullscreen        = 2
+	XdgToplevelStateMaximized         = 1
+	XdgToplevelStateResizing          = 3
+	XdgToplevelStateSuspended         = 9
+	XdgToplevelStateTiledBottom       = 8
+	XdgToplevelStateTiledLeft         = 5
+	XdgToplevelStateTiledRight        = 6
+	XdgToplevelStateTiledTop          = 7
 )
+
 // XdgToplevelWmCapabilities values.
 const (
 	XdgToplevelWmCapabilitiesFullscreen = 3
-	XdgToplevelWmCapabilitiesMaximize = 2
-	XdgToplevelWmCapabilitiesMinimize = 4
+	XdgToplevelWmCapabilitiesMaximize   = 2
+	XdgToplevelWmCapabilitiesMinimize   = 4
 	XdgToplevelWmCapabilitiesWindowMenu = 1
 )
 
@@ -740,6 +749,7 @@ func (o *XdgToplevel) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // XdgPopupError values.
 const (
 	XdgPopupErrorInvalidGrab = 0

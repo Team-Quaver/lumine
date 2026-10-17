@@ -2,7 +2,6 @@
 
 package wl
 
-
 var wlRegistryIface = &Interface{
 	Name:    "wl_registry",
 	Version: 1,
@@ -203,6 +202,7 @@ func (o *WlCompositor) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlShmPoolError values.
 const (
 	WlShmPoolErrorInvalidFormat = 0
@@ -281,162 +281,164 @@ func (o *WlShmPool) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlShmError values.
 const (
-	WlShmErrorInvalidFd = 2
+	WlShmErrorInvalidFd     = 2
 	WlShmErrorInvalidFormat = 0
 	WlShmErrorInvalidStride = 1
 )
+
 // WlShmFormat values.
 const (
-	WlShmFormatAbgr1555 = 0x35314241
-	WlShmFormatAbgr16161616 = 0x38344241
-	WlShmFormatAbgr16161616f = 0x48344241
-	WlShmFormatAbgr2101010 = 0x30334241
-	WlShmFormatAbgr32323232f = 0x46384241
-	WlShmFormatAbgr4444 = 0x32314241
-	WlShmFormatAbgr8888 = 0x34324241
-	WlShmFormatArgb1555 = 0x35315241
-	WlShmFormatArgb16161616 = 0x38345241
-	WlShmFormatArgb16161616f = 0x48345241
-	WlShmFormatArgb2101010 = 0x30335241
-	WlShmFormatArgb4444 = 0x32315241
-	WlShmFormatArgb8888 = 0
-	WlShmFormatAvuy8888 = 0x59555641
+	WlShmFormatAbgr1555             = 0x35314241
+	WlShmFormatAbgr16161616         = 0x38344241
+	WlShmFormatAbgr16161616f        = 0x48344241
+	WlShmFormatAbgr2101010          = 0x30334241
+	WlShmFormatAbgr32323232f        = 0x46384241
+	WlShmFormatAbgr4444             = 0x32314241
+	WlShmFormatAbgr8888             = 0x34324241
+	WlShmFormatArgb1555             = 0x35315241
+	WlShmFormatArgb16161616         = 0x38345241
+	WlShmFormatArgb16161616f        = 0x48345241
+	WlShmFormatArgb2101010          = 0x30335241
+	WlShmFormatArgb4444             = 0x32315241
+	WlShmFormatArgb8888             = 0
+	WlShmFormatAvuy8888             = 0x59555641
 	WlShmFormatAxbxgxrx106106106106 = 0x30314241
-	WlShmFormatAyuv = 0x56555941
-	WlShmFormatBgr161616 = 0x38344742
-	WlShmFormatBgr161616f = 0x48524742
-	WlShmFormatBgr233 = 0x38524742
-	WlShmFormatBgr323232f = 0x46524742
-	WlShmFormatBgr565 = 0x36314742
-	WlShmFormatBgr565A8 = 0x38413542
-	WlShmFormatBgr888 = 0x34324742
-	WlShmFormatBgr888A8 = 0x38413842
-	WlShmFormatBgra1010102 = 0x30334142
-	WlShmFormatBgra4444 = 0x32314142
-	WlShmFormatBgra5551 = 0x35314142
-	WlShmFormatBgra8888 = 0x34324142
-	WlShmFormatBgrx1010102 = 0x30335842
-	WlShmFormatBgrx4444 = 0x32315842
-	WlShmFormatBgrx5551 = 0x35315842
-	WlShmFormatBgrx8888 = 0x34325842
-	WlShmFormatBgrx8888A8 = 0x38415842
-	WlShmFormatC1 = 0x20203143
-	WlShmFormatC2 = 0x20203243
-	WlShmFormatC4 = 0x20203443
-	WlShmFormatC8 = 0x20203843
-	WlShmFormatD1 = 0x20203144
-	WlShmFormatD2 = 0x20203244
-	WlShmFormatD4 = 0x20203444
-	WlShmFormatD8 = 0x20203844
-	WlShmFormatGr1616 = 0x32335247
-	WlShmFormatGr1616f = 0x48205247
-	WlShmFormatGr3232f = 0x46205247
-	WlShmFormatGr88 = 0x38385247
-	WlShmFormatNv12 = 0x3231564e
-	WlShmFormatNv15 = 0x3531564e
-	WlShmFormatNv16 = 0x3631564e
-	WlShmFormatNv20 = 0x3032564e
-	WlShmFormatNv21 = 0x3132564e
-	WlShmFormatNv24 = 0x3432564e
-	WlShmFormatNv30 = 0x3033564e
-	WlShmFormatNv42 = 0x3234564e
-	WlShmFormatNv61 = 0x3136564e
-	WlShmFormatP010 = 0x30313050
-	WlShmFormatP012 = 0x32313050
-	WlShmFormatP016 = 0x36313050
-	WlShmFormatP030 = 0x30333050
-	WlShmFormatP210 = 0x30313250
-	WlShmFormatP230 = 0x30333250
-	WlShmFormatQ401 = 0x31303451
-	WlShmFormatQ410 = 0x30313451
-	WlShmFormatR1 = 0x20203152
-	WlShmFormatR10 = 0x20303152
-	WlShmFormatR12 = 0x20323152
-	WlShmFormatR16 = 0x20363152
-	WlShmFormatR16f = 0x48202052
-	WlShmFormatR2 = 0x20203252
-	WlShmFormatR32f = 0x46202052
-	WlShmFormatR4 = 0x20203452
-	WlShmFormatR8 = 0x20203852
-	WlShmFormatRg1616 = 0x32334752
-	WlShmFormatRg88 = 0x38384752
-	WlShmFormatRgb161616 = 0x38344752
-	WlShmFormatRgb332 = 0x38424752
-	WlShmFormatRgb565 = 0x36314752
-	WlShmFormatRgb565A8 = 0x38413552
-	WlShmFormatRgb888 = 0x34324752
-	WlShmFormatRgb888A8 = 0x38413852
-	WlShmFormatRgba1010102 = 0x30334152
-	WlShmFormatRgba4444 = 0x32314152
-	WlShmFormatRgba5551 = 0x35314152
-	WlShmFormatRgba8888 = 0x34324152
-	WlShmFormatRgbx1010102 = 0x30335852
-	WlShmFormatRgbx4444 = 0x32315852
-	WlShmFormatRgbx5551 = 0x35315852
-	WlShmFormatRgbx8888 = 0x34325852
-	WlShmFormatRgbx8888A8 = 0x38415852
-	WlShmFormatS010 = 0x30313053
-	WlShmFormatS012 = 0x32313053
-	WlShmFormatS016 = 0x36313053
-	WlShmFormatS210 = 0x30313253
-	WlShmFormatS212 = 0x32313253
-	WlShmFormatS216 = 0x36313253
-	WlShmFormatS410 = 0x30313453
-	WlShmFormatS412 = 0x32313453
-	WlShmFormatS416 = 0x36313453
-	WlShmFormatT430 = 0x30333454
-	WlShmFormatUyvy = 0x59565955
-	WlShmFormatVuy101010 = 0x30335556
-	WlShmFormatVuy888 = 0x34325556
-	WlShmFormatVyuy = 0x59555956
-	WlShmFormatX0l0 = 0x304c3058
-	WlShmFormatX0l2 = 0x324c3058
-	WlShmFormatXbgr1555 = 0x35314258
-	WlShmFormatXbgr16161616 = 0x38344258
-	WlShmFormatXbgr16161616f = 0x48344258
-	WlShmFormatXbgr2101010 = 0x30334258
-	WlShmFormatXbgr4444 = 0x32314258
-	WlShmFormatXbgr8888 = 0x34324258
-	WlShmFormatXbgr8888A8 = 0x38414258
-	WlShmFormatXrgb1555 = 0x35315258
-	WlShmFormatXrgb16161616 = 0x38345258
-	WlShmFormatXrgb16161616f = 0x48345258
-	WlShmFormatXrgb2101010 = 0x30335258
-	WlShmFormatXrgb4444 = 0x32315258
-	WlShmFormatXrgb8888 = 1
-	WlShmFormatXrgb8888A8 = 0x38415258
-	WlShmFormatXvuy2101010 = 0x30335958
-	WlShmFormatXvuy8888 = 0x59555658
-	WlShmFormatXvyu1216161616 = 0x36335658
-	WlShmFormatXvyu16161616 = 0x38345658
-	WlShmFormatXvyu2101010 = 0x30335658
-	WlShmFormatXyuv8888 = 0x56555958
-	WlShmFormatXyyy2101010 = 0x34415059
-	WlShmFormatY0l0 = 0x304c3059
-	WlShmFormatY0l2 = 0x324c3059
-	WlShmFormatY210 = 0x30313259
-	WlShmFormatY212 = 0x32313259
-	WlShmFormatY216 = 0x36313259
-	WlShmFormatY410 = 0x30313459
-	WlShmFormatY412 = 0x32313459
-	WlShmFormatY416 = 0x36313459
-	WlShmFormatY8 = 0x59455247
-	WlShmFormatYuv410 = 0x39565559
-	WlShmFormatYuv411 = 0x31315559
-	WlShmFormatYuv420 = 0x32315559
-	WlShmFormatYuv42010bit = 0x30315559
-	WlShmFormatYuv4208bit = 0x38305559
-	WlShmFormatYuv422 = 0x36315559
-	WlShmFormatYuv444 = 0x34325559
-	WlShmFormatYuyv = 0x56595559
-	WlShmFormatYvu410 = 0x39555659
-	WlShmFormatYvu411 = 0x31315659
-	WlShmFormatYvu420 = 0x32315659
-	WlShmFormatYvu422 = 0x36315659
-	WlShmFormatYvu444 = 0x34325659
-	WlShmFormatYvyu = 0x55595659
+	WlShmFormatAyuv                 = 0x56555941
+	WlShmFormatBgr161616            = 0x38344742
+	WlShmFormatBgr161616f           = 0x48524742
+	WlShmFormatBgr233               = 0x38524742
+	WlShmFormatBgr323232f           = 0x46524742
+	WlShmFormatBgr565               = 0x36314742
+	WlShmFormatBgr565A8             = 0x38413542
+	WlShmFormatBgr888               = 0x34324742
+	WlShmFormatBgr888A8             = 0x38413842
+	WlShmFormatBgra1010102          = 0x30334142
+	WlShmFormatBgra4444             = 0x32314142
+	WlShmFormatBgra5551             = 0x35314142
+	WlShmFormatBgra8888             = 0x34324142
+	WlShmFormatBgrx1010102          = 0x30335842
+	WlShmFormatBgrx4444             = 0x32315842
+	WlShmFormatBgrx5551             = 0x35315842
+	WlShmFormatBgrx8888             = 0x34325842
+	WlShmFormatBgrx8888A8           = 0x38415842
+	WlShmFormatC1                   = 0x20203143
+	WlShmFormatC2                   = 0x20203243
+	WlShmFormatC4                   = 0x20203443
+	WlShmFormatC8                   = 0x20203843
+	WlShmFormatD1                   = 0x20203144
+	WlShmFormatD2                   = 0x20203244
+	WlShmFormatD4                   = 0x20203444
+	WlShmFormatD8                   = 0x20203844
+	WlShmFormatGr1616               = 0x32335247
+	WlShmFormatGr1616f              = 0x48205247
+	WlShmFormatGr3232f              = 0x46205247
+	WlShmFormatGr88                 = 0x38385247
+	WlShmFormatNv12                 = 0x3231564e
+	WlShmFormatNv15                 = 0x3531564e
+	WlShmFormatNv16                 = 0x3631564e
+	WlShmFormatNv20                 = 0x3032564e
+	WlShmFormatNv21                 = 0x3132564e
+	WlShmFormatNv24                 = 0x3432564e
+	WlShmFormatNv30                 = 0x3033564e
+	WlShmFormatNv42                 = 0x3234564e
+	WlShmFormatNv61                 = 0x3136564e
+	WlShmFormatP010                 = 0x30313050
+	WlShmFormatP012                 = 0x32313050
+	WlShmFormatP016                 = 0x36313050
+	WlShmFormatP030                 = 0x30333050
+	WlShmFormatP210                 = 0x30313250
+	WlShmFormatP230                 = 0x30333250
+	WlShmFormatQ401                 = 0x31303451
+	WlShmFormatQ410                 = 0x30313451
+	WlShmFormatR1                   = 0x20203152
+	WlShmFormatR10                  = 0x20303152
+	WlShmFormatR12                  = 0x20323152
+	WlShmFormatR16                  = 0x20363152
+	WlShmFormatR16f                 = 0x48202052
+	WlShmFormatR2                   = 0x20203252
+	WlShmFormatR32f                 = 0x46202052
+	WlShmFormatR4                   = 0x20203452
+	WlShmFormatR8                   = 0x20203852
+	WlShmFormatRg1616               = 0x32334752
+	WlShmFormatRg88                 = 0x38384752
+	WlShmFormatRgb161616            = 0x38344752
+	WlShmFormatRgb332               = 0x38424752
+	WlShmFormatRgb565               = 0x36314752
+	WlShmFormatRgb565A8             = 0x38413552
+	WlShmFormatRgb888               = 0x34324752
+	WlShmFormatRgb888A8             = 0x38413852
+	WlShmFormatRgba1010102          = 0x30334152
+	WlShmFormatRgba4444             = 0x32314152
+	WlShmFormatRgba5551             = 0x35314152
+	WlShmFormatRgba8888             = 0x34324152
+	WlShmFormatRgbx1010102          = 0x30335852
+	WlShmFormatRgbx4444             = 0x32315852
+	WlShmFormatRgbx5551             = 0x35315852
+	WlShmFormatRgbx8888             = 0x34325852
+	WlShmFormatRgbx8888A8           = 0x38415852
+	WlShmFormatS010                 = 0x30313053
+	WlShmFormatS012                 = 0x32313053
+	WlShmFormatS016                 = 0x36313053
+	WlShmFormatS210                 = 0x30313253
+	WlShmFormatS212                 = 0x32313253
+	WlShmFormatS216                 = 0x36313253
+	WlShmFormatS410                 = 0x30313453
+	WlShmFormatS412                 = 0x32313453
+	WlShmFormatS416                 = 0x36313453
+	WlShmFormatT430                 = 0x30333454
+	WlShmFormatUyvy                 = 0x59565955
+	WlShmFormatVuy101010            = 0x30335556
+	WlShmFormatVuy888               = 0x34325556
+	WlShmFormatVyuy                 = 0x59555956
+	WlShmFormatX0l0                 = 0x304c3058
+	WlShmFormatX0l2                 = 0x324c3058
+	WlShmFormatXbgr1555             = 0x35314258
+	WlShmFormatXbgr16161616         = 0x38344258
+	WlShmFormatXbgr16161616f        = 0x48344258
+	WlShmFormatXbgr2101010          = 0x30334258
+	WlShmFormatXbgr4444             = 0x32314258
+	WlShmFormatXbgr8888             = 0x34324258
+	WlShmFormatXbgr8888A8           = 0x38414258
+	WlShmFormatXrgb1555             = 0x35315258
+	WlShmFormatXrgb16161616         = 0x38345258
+	WlShmFormatXrgb16161616f        = 0x48345258
+	WlShmFormatXrgb2101010          = 0x30335258
+	WlShmFormatXrgb4444             = 0x32315258
+	WlShmFormatXrgb8888             = 1
+	WlShmFormatXrgb8888A8           = 0x38415258
+	WlShmFormatXvuy2101010          = 0x30335958
+	WlShmFormatXvuy8888             = 0x59555658
+	WlShmFormatXvyu1216161616       = 0x36335658
+	WlShmFormatXvyu16161616         = 0x38345658
+	WlShmFormatXvyu2101010          = 0x30335658
+	WlShmFormatXyuv8888             = 0x56555958
+	WlShmFormatXyyy2101010          = 0x34415059
+	WlShmFormatY0l0                 = 0x304c3059
+	WlShmFormatY0l2                 = 0x324c3059
+	WlShmFormatY210                 = 0x30313259
+	WlShmFormatY212                 = 0x32313259
+	WlShmFormatY216                 = 0x36313259
+	WlShmFormatY410                 = 0x30313459
+	WlShmFormatY412                 = 0x32313459
+	WlShmFormatY416                 = 0x36313459
+	WlShmFormatY8                   = 0x59455247
+	WlShmFormatYuv410               = 0x39565559
+	WlShmFormatYuv411               = 0x31315559
+	WlShmFormatYuv420               = 0x32315559
+	WlShmFormatYuv42010bit          = 0x30315559
+	WlShmFormatYuv4208bit           = 0x38305559
+	WlShmFormatYuv422               = 0x36315559
+	WlShmFormatYuv444               = 0x34325559
+	WlShmFormatYuyv                 = 0x56595559
+	WlShmFormatYvu410               = 0x39555659
+	WlShmFormatYvu411               = 0x31315659
+	WlShmFormatYvu420               = 0x32315659
+	WlShmFormatYvu422               = 0x36315659
+	WlShmFormatYvu444               = 0x34325659
+	WlShmFormatYvyu                 = 0x55595659
 )
 
 var wlShmIface = &Interface{
@@ -582,12 +584,13 @@ func (o *WlBuffer) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlDataOfferError values.
 const (
-	WlDataOfferErrorInvalidAction = 2
+	WlDataOfferErrorInvalidAction     = 2
 	WlDataOfferErrorInvalidActionMask = 1
-	WlDataOfferErrorInvalidFinish = 0
-	WlDataOfferErrorInvalidOffer = 3
+	WlDataOfferErrorInvalidFinish     = 0
+	WlDataOfferErrorInvalidOffer      = 3
 )
 
 var wlDataOfferIface = &Interface{
@@ -726,10 +729,11 @@ func (o *WlDataOffer) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlDataSourceError values.
 const (
 	WlDataSourceErrorInvalidActionMask = 0
-	WlDataSourceErrorInvalidSource = 1
+	WlDataSourceErrorInvalidSource     = 1
 )
 
 var wlDataSourceIface = &Interface{
@@ -873,9 +877,10 @@ func (o *WlDataSource) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlDataDeviceError values.
 const (
-	WlDataDeviceErrorRole = 0
+	WlDataDeviceErrorRole       = 0
 	WlDataDeviceErrorUsedSource = 1
 )
 
@@ -1030,9 +1035,10 @@ func (o *WlDataDevice) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlDataDeviceManagerDndAction values.
 const (
-	WlDataDeviceManagerDndActionAsk = 4
+	WlDataDeviceManagerDndActionAsk  = 4
 	WlDataDeviceManagerDndActionCopy = 1
 	WlDataDeviceManagerDndActionMove = 2
 	WlDataDeviceManagerDndActionNone = 0
@@ -1107,6 +1113,7 @@ func (o *WlDataDeviceManager) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlShellError values.
 const (
 	WlShellErrorRole = 0
@@ -1156,28 +1163,31 @@ func (o *WlShell) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlShellSurfaceResize values.
 const (
-	WlShellSurfaceResizeBottom = 2
-	WlShellSurfaceResizeBottomLeft = 6
+	WlShellSurfaceResizeBottom      = 2
+	WlShellSurfaceResizeBottomLeft  = 6
 	WlShellSurfaceResizeBottomRight = 10
-	WlShellSurfaceResizeLeft = 4
-	WlShellSurfaceResizeNone = 0
-	WlShellSurfaceResizeRight = 8
-	WlShellSurfaceResizeTop = 1
-	WlShellSurfaceResizeTopLeft = 5
-	WlShellSurfaceResizeTopRight = 9
+	WlShellSurfaceResizeLeft        = 4
+	WlShellSurfaceResizeNone        = 0
+	WlShellSurfaceResizeRight       = 8
+	WlShellSurfaceResizeTop         = 1
+	WlShellSurfaceResizeTopLeft     = 5
+	WlShellSurfaceResizeTopRight    = 9
 )
+
 // WlShellSurfaceTransient values.
 const (
 	WlShellSurfaceTransientInactive = 0x1
 )
+
 // WlShellSurfaceFullscreenMethod values.
 const (
 	WlShellSurfaceFullscreenMethodDefault = 0
-	WlShellSurfaceFullscreenMethodDriver = 2
-	WlShellSurfaceFullscreenMethodFill = 3
-	WlShellSurfaceFullscreenMethodScale = 1
+	WlShellSurfaceFullscreenMethodDriver  = 2
+	WlShellSurfaceFullscreenMethodFill    = 3
+	WlShellSurfaceFullscreenMethodScale   = 1
 )
 
 var wlShellSurfaceIface = &Interface{
@@ -1387,14 +1397,15 @@ func (o *WlShellSurface) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlSurfaceError values.
 const (
 	WlSurfaceErrorDefunctRoleObject = 4
-	WlSurfaceErrorInvalidOffset = 3
-	WlSurfaceErrorInvalidScale = 0
-	WlSurfaceErrorInvalidSize = 2
-	WlSurfaceErrorInvalidTransform = 1
-	WlSurfaceErrorNoBuffer = 5
+	WlSurfaceErrorInvalidOffset     = 3
+	WlSurfaceErrorInvalidScale      = 0
+	WlSurfaceErrorInvalidSize       = 2
+	WlSurfaceErrorInvalidTransform  = 1
+	WlSurfaceErrorNoBuffer          = 5
 )
 
 var wlSurfaceIface = &Interface{
@@ -1636,12 +1647,14 @@ func (o *WlSurface) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlSeatCapability values.
 const (
 	WlSeatCapabilityKeyboard = 2
-	WlSeatCapabilityPointer = 1
-	WlSeatCapabilityTouch = 4
+	WlSeatCapabilityPointer  = 1
+	WlSeatCapabilityTouch    = 4
 )
+
 // WlSeatError values.
 const (
 	WlSeatErrorMissingCapability = 0
@@ -1761,31 +1774,36 @@ func (o *WlSeat) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlPointerError values.
 const (
 	WlPointerErrorRole = 0
 )
+
 // WlPointerButtonState values.
 const (
-	WlPointerButtonStatePressed = 1
+	WlPointerButtonStatePressed  = 1
 	WlPointerButtonStateReleased = 0
 )
+
 // WlPointerAxis values.
 const (
 	WlPointerAxisHorizontalScroll = 1
-	WlPointerAxisVerticalScroll = 0
+	WlPointerAxisVerticalScroll   = 0
 )
+
 // WlPointerAxisSource values.
 const (
 	WlPointerAxisSourceContinuous = 2
-	WlPointerAxisSourceFinger = 1
-	WlPointerAxisSourceWheel = 0
-	WlPointerAxisSourceWheelTilt = 3
+	WlPointerAxisSourceFinger     = 1
+	WlPointerAxisSourceWheel      = 0
+	WlPointerAxisSourceWheelTilt  = 3
 )
+
 // WlPointerAxisRelativeDirection values.
 const (
 	WlPointerAxisRelativeDirectionIdentical = 0
-	WlPointerAxisRelativeDirectionInverted = 1
+	WlPointerAxisRelativeDirectionInverted  = 1
 )
 
 var wlPointerIface = &Interface{
@@ -2003,14 +2021,16 @@ func (o *WlPointer) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlKeyboardKeymapFormat values.
 const (
 	WlKeyboardKeymapFormatNoKeymap = 0
-	WlKeyboardKeymapFormatXkbV1 = 1
+	WlKeyboardKeymapFormatXkbV1    = 1
 )
+
 // WlKeyboardKeyState values.
 const (
-	WlKeyboardKeyStatePressed = 1
+	WlKeyboardKeyStatePressed  = 1
 	WlKeyboardKeyStateReleased = 0
 	WlKeyboardKeyStateRepeated = 2
 )
@@ -2289,29 +2309,32 @@ func (o *WlTouch) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlOutputSubpixel values.
 const (
 	WlOutputSubpixelHorizontalBgr = 3
 	WlOutputSubpixelHorizontalRgb = 2
-	WlOutputSubpixelNone = 1
-	WlOutputSubpixelUnknown = 0
-	WlOutputSubpixelVerticalBgr = 5
-	WlOutputSubpixelVerticalRgb = 4
+	WlOutputSubpixelNone          = 1
+	WlOutputSubpixelUnknown       = 0
+	WlOutputSubpixelVerticalBgr   = 5
+	WlOutputSubpixelVerticalRgb   = 4
 )
+
 // WlOutputTransform values.
 const (
-	WlOutputTransform180 = 2
-	WlOutputTransform270 = 3
-	WlOutputTransform90 = 1
-	WlOutputTransformFlipped = 4
+	WlOutputTransform180        = 2
+	WlOutputTransform270        = 3
+	WlOutputTransform90         = 1
+	WlOutputTransformFlipped    = 4
 	WlOutputTransformFlipped180 = 6
 	WlOutputTransformFlipped270 = 7
-	WlOutputTransformFlipped90 = 5
-	WlOutputTransformNormal = 0
+	WlOutputTransformFlipped90  = 5
+	WlOutputTransformNormal     = 0
 )
+
 // WlOutputMode values.
 const (
-	WlOutputModeCurrent = 0x1
+	WlOutputModeCurrent   = 0x1
 	WlOutputModePreferred = 0x2
 )
 
@@ -2516,9 +2539,10 @@ func (o *WlRegion) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlSubcompositorError values.
 const (
-	WlSubcompositorErrorBadParent = 1
+	WlSubcompositorErrorBadParent  = 1
 	WlSubcompositorErrorBadSurface = 0
 )
 
@@ -2579,6 +2603,7 @@ func (o *WlSubcompositor) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlSubsurfaceError values.
 const (
 	WlSubsurfaceErrorBadSurface = 0
@@ -2685,6 +2710,7 @@ func (o *WlSubsurface) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WlFixesError values.
 const (
 	WlFixesErrorInvalidAckRemove = 0

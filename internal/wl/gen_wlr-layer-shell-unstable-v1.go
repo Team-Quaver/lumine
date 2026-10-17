@@ -5,15 +5,16 @@ package wl
 // ZwlrLayerShellV1Error values.
 const (
 	ZwlrLayerShellV1ErrorAlreadyConstructed = 2
-	ZwlrLayerShellV1ErrorInvalidLayer = 1
-	ZwlrLayerShellV1ErrorRole = 0
+	ZwlrLayerShellV1ErrorInvalidLayer       = 1
+	ZwlrLayerShellV1ErrorRole               = 0
 )
+
 // ZwlrLayerShellV1Layer values.
 const (
 	ZwlrLayerShellV1LayerBackground = 0
-	ZwlrLayerShellV1LayerBottom = 1
-	ZwlrLayerShellV1LayerOverlay = 3
-	ZwlrLayerShellV1LayerTop = 2
+	ZwlrLayerShellV1LayerBottom     = 1
+	ZwlrLayerShellV1LayerOverlay    = 3
+	ZwlrLayerShellV1LayerTop        = 2
 )
 
 var zwlrLayerShellV1Iface = &Interface{
@@ -75,26 +76,29 @@ func (o *ZwlrLayerShellV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwlrLayerSurfaceV1KeyboardInteractivity values.
 const (
 	ZwlrLayerSurfaceV1KeyboardInteractivityExclusive = 1
-	ZwlrLayerSurfaceV1KeyboardInteractivityNone = 0
-	ZwlrLayerSurfaceV1KeyboardInteractivityOnDemand = 2
+	ZwlrLayerSurfaceV1KeyboardInteractivityNone      = 0
+	ZwlrLayerSurfaceV1KeyboardInteractivityOnDemand  = 2
 )
+
 // ZwlrLayerSurfaceV1Error values.
 const (
-	ZwlrLayerSurfaceV1ErrorInvalidAnchor = 2
-	ZwlrLayerSurfaceV1ErrorInvalidExclusiveEdge = 4
+	ZwlrLayerSurfaceV1ErrorInvalidAnchor                = 2
+	ZwlrLayerSurfaceV1ErrorInvalidExclusiveEdge         = 4
 	ZwlrLayerSurfaceV1ErrorInvalidKeyboardInteractivity = 3
-	ZwlrLayerSurfaceV1ErrorInvalidSize = 1
-	ZwlrLayerSurfaceV1ErrorInvalidSurfaceState = 0
+	ZwlrLayerSurfaceV1ErrorInvalidSize                  = 1
+	ZwlrLayerSurfaceV1ErrorInvalidSurfaceState          = 0
 )
+
 // ZwlrLayerSurfaceV1Anchor values.
 const (
 	ZwlrLayerSurfaceV1AnchorBottom = 2
-	ZwlrLayerSurfaceV1AnchorLeft = 4
-	ZwlrLayerSurfaceV1AnchorRight = 8
-	ZwlrLayerSurfaceV1AnchorTop = 1
+	ZwlrLayerSurfaceV1AnchorLeft   = 4
+	ZwlrLayerSurfaceV1AnchorRight  = 8
+	ZwlrLayerSurfaceV1AnchorTop    = 1
 )
 
 var zwlrLayerSurfaceV1Iface = &Interface{

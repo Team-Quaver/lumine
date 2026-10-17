@@ -4,59 +4,63 @@ package wl
 
 // WpColorManagerV1Error values.
 const (
-	WpColorManagerV1ErrorSurfaceExists = 1
+	WpColorManagerV1ErrorSurfaceExists      = 1
 	WpColorManagerV1ErrorUnsupportedFeature = 0
 )
+
 // WpColorManagerV1RenderIntent values.
 const (
-	WpColorManagerV1RenderIntentAbsolute = 3
+	WpColorManagerV1RenderIntentAbsolute             = 3
 	WpColorManagerV1RenderIntentAbsoluteNoAdaptation = 5
-	WpColorManagerV1RenderIntentPerceptual = 0
-	WpColorManagerV1RenderIntentRelative = 1
-	WpColorManagerV1RenderIntentRelativeBpc = 4
-	WpColorManagerV1RenderIntentSaturation = 2
+	WpColorManagerV1RenderIntentPerceptual           = 0
+	WpColorManagerV1RenderIntentRelative             = 1
+	WpColorManagerV1RenderIntentRelativeBpc          = 4
+	WpColorManagerV1RenderIntentSaturation           = 2
 )
+
 // WpColorManagerV1Feature values.
 const (
-	WpColorManagerV1FeatureExtendedTargetVolume = 6
-	WpColorManagerV1FeatureIccV2V4 = 0
-	WpColorManagerV1FeatureParametric = 1
-	WpColorManagerV1FeatureSetLuminances = 4
+	WpColorManagerV1FeatureExtendedTargetVolume         = 6
+	WpColorManagerV1FeatureIccV2V4                      = 0
+	WpColorManagerV1FeatureParametric                   = 1
+	WpColorManagerV1FeatureSetLuminances                = 4
 	WpColorManagerV1FeatureSetMasteringDisplayPrimaries = 5
-	WpColorManagerV1FeatureSetPrimaries = 2
-	WpColorManagerV1FeatureSetTfPower = 3
-	WpColorManagerV1FeatureWindowsBt2100 = 8
-	WpColorManagerV1FeatureWindowsScrgb = 7
+	WpColorManagerV1FeatureSetPrimaries                 = 2
+	WpColorManagerV1FeatureSetTfPower                   = 3
+	WpColorManagerV1FeatureWindowsBt2100                = 8
+	WpColorManagerV1FeatureWindowsScrgb                 = 7
 )
+
 // WpColorManagerV1Primaries values.
 const (
-	WpColorManagerV1PrimariesAdobeRgb = 10
-	WpColorManagerV1PrimariesBt2020 = 6
-	WpColorManagerV1PrimariesCie1931Xyz = 7
-	WpColorManagerV1PrimariesDciP3 = 8
-	WpColorManagerV1PrimariesDisplayP3 = 9
+	WpColorManagerV1PrimariesAdobeRgb    = 10
+	WpColorManagerV1PrimariesBt2020      = 6
+	WpColorManagerV1PrimariesCie1931Xyz  = 7
+	WpColorManagerV1PrimariesDciP3       = 8
+	WpColorManagerV1PrimariesDisplayP3   = 9
 	WpColorManagerV1PrimariesGenericFilm = 5
-	WpColorManagerV1PrimariesNtsc = 4
-	WpColorManagerV1PrimariesPal = 3
-	WpColorManagerV1PrimariesPalM = 2
-	WpColorManagerV1PrimariesSrgb = 1
+	WpColorManagerV1PrimariesNtsc        = 4
+	WpColorManagerV1PrimariesPal         = 3
+	WpColorManagerV1PrimariesPalM        = 2
+	WpColorManagerV1PrimariesSrgb        = 1
 )
+
 // WpColorManagerV1TransferFunction values.
 const (
-	WpColorManagerV1TransferFunctionBt1886 = 1
+	WpColorManagerV1TransferFunctionBt1886          = 1
 	WpColorManagerV1TransferFunctionCompoundPower24 = 14
-	WpColorManagerV1TransferFunctionExtLinear = 5
-	WpColorManagerV1TransferFunctionExtSrgb = 10
-	WpColorManagerV1TransferFunctionGamma22 = 2
-	WpColorManagerV1TransferFunctionGamma28 = 3
-	WpColorManagerV1TransferFunctionHlg = 13
-	WpColorManagerV1TransferFunctionLog100 = 6
-	WpColorManagerV1TransferFunctionLog316 = 7
-	WpColorManagerV1TransferFunctionSrgb = 9
-	WpColorManagerV1TransferFunctionSt2084Pq = 11
-	WpColorManagerV1TransferFunctionSt240 = 4
-	WpColorManagerV1TransferFunctionSt428 = 12
-	WpColorManagerV1TransferFunctionXvycc = 8
+	WpColorManagerV1TransferFunctionExtLinear       = 5
+	WpColorManagerV1TransferFunctionExtSrgb         = 10
+	WpColorManagerV1TransferFunctionGamma22         = 2
+	WpColorManagerV1TransferFunctionGamma28         = 3
+	WpColorManagerV1TransferFunctionHlg             = 13
+	WpColorManagerV1TransferFunctionLog100          = 6
+	WpColorManagerV1TransferFunctionLog316          = 7
+	WpColorManagerV1TransferFunctionSrgb            = 9
+	WpColorManagerV1TransferFunctionSt2084Pq        = 11
+	WpColorManagerV1TransferFunctionSt240           = 4
+	WpColorManagerV1TransferFunctionSt428           = 12
+	WpColorManagerV1TransferFunctionXvycc           = 8
 )
 
 var wpColorManagerV1Iface = &Interface{
@@ -351,11 +355,12 @@ func (o *WpColorManagementOutputV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WpColorManagementSurfaceV1Error values.
 const (
 	WpColorManagementSurfaceV1ErrorImageDescription = 1
-	WpColorManagementSurfaceV1ErrorInert = 2
-	WpColorManagementSurfaceV1ErrorRenderIntent = 0
+	WpColorManagementSurfaceV1ErrorInert            = 2
+	WpColorManagementSurfaceV1ErrorRenderIntent     = 0
 )
 
 var wpColorManagementSurfaceV1Iface = &Interface{
@@ -424,9 +429,10 @@ func (o *WpColorManagementSurfaceV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WpColorManagementSurfaceFeedbackV1Error values.
 const (
-	WpColorManagementSurfaceFeedbackV1ErrorInert = 0
+	WpColorManagementSurfaceFeedbackV1ErrorInert              = 0
 	WpColorManagementSurfaceFeedbackV1ErrorUnsupportedFeature = 1
 )
 
@@ -532,13 +538,14 @@ func (o *WpColorManagementSurfaceFeedbackV1) dispatch(opcode uint16, r *wireRead
 		}
 	}
 }
+
 // WpImageDescriptionCreatorIccV1Error values.
 const (
-	WpImageDescriptionCreatorIccV1ErrorAlreadySet = 1
-	WpImageDescriptionCreatorIccV1ErrorBadFd = 2
-	WpImageDescriptionCreatorIccV1ErrorBadSize = 3
+	WpImageDescriptionCreatorIccV1ErrorAlreadySet    = 1
+	WpImageDescriptionCreatorIccV1ErrorBadFd         = 2
+	WpImageDescriptionCreatorIccV1ErrorBadSize       = 3
 	WpImageDescriptionCreatorIccV1ErrorIncompleteSet = 0
-	WpImageDescriptionCreatorIccV1ErrorOutOfFile = 4
+	WpImageDescriptionCreatorIccV1ErrorOutOfFile     = 4
 )
 
 var wpImageDescriptionCreatorIccV1Iface = &Interface{
@@ -599,14 +606,15 @@ func (o *WpImageDescriptionCreatorIccV1) dispatch(opcode uint16, r *wireReader) 
 		}
 	}
 }
+
 // WpImageDescriptionCreatorParamsV1Error values.
 const (
-	WpImageDescriptionCreatorParamsV1ErrorAlreadySet = 1
-	WpImageDescriptionCreatorParamsV1ErrorIncompleteSet = 0
-	WpImageDescriptionCreatorParamsV1ErrorInvalidLuminance = 5
+	WpImageDescriptionCreatorParamsV1ErrorAlreadySet            = 1
+	WpImageDescriptionCreatorParamsV1ErrorIncompleteSet         = 0
+	WpImageDescriptionCreatorParamsV1ErrorInvalidLuminance      = 5
 	WpImageDescriptionCreatorParamsV1ErrorInvalidPrimariesNamed = 4
-	WpImageDescriptionCreatorParamsV1ErrorInvalidTf = 3
-	WpImageDescriptionCreatorParamsV1ErrorUnsupportedFeature = 2
+	WpImageDescriptionCreatorParamsV1ErrorInvalidTf             = 3
+	WpImageDescriptionCreatorParamsV1ErrorUnsupportedFeature    = 2
 )
 
 var wpImageDescriptionCreatorParamsV1Iface = &Interface{
@@ -778,17 +786,19 @@ func (o *WpImageDescriptionCreatorParamsV1) dispatch(opcode uint16, r *wireReade
 		}
 	}
 }
+
 // WpImageDescriptionV1Error values.
 const (
 	WpImageDescriptionV1ErrorNoInformation = 1
-	WpImageDescriptionV1ErrorNotReady = 0
+	WpImageDescriptionV1ErrorNotReady      = 0
 )
+
 // WpImageDescriptionV1Cause values.
 const (
-	WpImageDescriptionV1CauseLowVersion = 0
-	WpImageDescriptionV1CauseNoOutput = 3
+	WpImageDescriptionV1CauseLowVersion      = 0
+	WpImageDescriptionV1CauseNoOutput        = 3
 	WpImageDescriptionV1CauseOperatingSystem = 2
-	WpImageDescriptionV1CauseUnsupported = 1
+	WpImageDescriptionV1CauseUnsupported     = 1
 )
 
 var wpImageDescriptionV1Iface = &Interface{

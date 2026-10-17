@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zwlrScreencopyManagerV1Iface = &Interface{
 	Name:    "zwlr_screencopy_manager_v1",
 	Version: 3,
@@ -79,11 +78,13 @@ func (o *ZwlrScreencopyManagerV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwlrScreencopyFrameV1Error values.
 const (
-	ZwlrScreencopyFrameV1ErrorAlreadyUsed = 0
+	ZwlrScreencopyFrameV1ErrorAlreadyUsed   = 0
 	ZwlrScreencopyFrameV1ErrorInvalidBuffer = 1
 )
+
 // ZwlrScreencopyFrameV1Flags values.
 const (
 	ZwlrScreencopyFrameV1FlagsYInvert = 1

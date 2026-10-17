@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zwpTabletManagerV2Iface = &Interface{
 	Name:    "zwp_tablet_manager_v2",
 	Version: 1,
@@ -146,31 +145,35 @@ func (o *ZwpTabletSeatV2) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpTabletToolV2Type values.
 const (
 	ZwpTabletToolV2TypeAirbrush = 0x144
-	ZwpTabletToolV2TypeBrush = 0x142
-	ZwpTabletToolV2TypeEraser = 0x141
-	ZwpTabletToolV2TypeFinger = 0x145
-	ZwpTabletToolV2TypeLens = 0x147
-	ZwpTabletToolV2TypeMouse = 0x146
-	ZwpTabletToolV2TypePen = 0x140
-	ZwpTabletToolV2TypePencil = 0x143
+	ZwpTabletToolV2TypeBrush    = 0x142
+	ZwpTabletToolV2TypeEraser   = 0x141
+	ZwpTabletToolV2TypeFinger   = 0x145
+	ZwpTabletToolV2TypeLens     = 0x147
+	ZwpTabletToolV2TypeMouse    = 0x146
+	ZwpTabletToolV2TypePen      = 0x140
+	ZwpTabletToolV2TypePencil   = 0x143
 )
+
 // ZwpTabletToolV2Capability values.
 const (
 	ZwpTabletToolV2CapabilityDistance = 3
 	ZwpTabletToolV2CapabilityPressure = 2
 	ZwpTabletToolV2CapabilityRotation = 4
-	ZwpTabletToolV2CapabilitySlider = 5
-	ZwpTabletToolV2CapabilityTilt = 1
-	ZwpTabletToolV2CapabilityWheel = 6
+	ZwpTabletToolV2CapabilitySlider   = 5
+	ZwpTabletToolV2CapabilityTilt     = 1
+	ZwpTabletToolV2CapabilityWheel    = 6
 )
+
 // ZwpTabletToolV2ButtonState values.
 const (
-	ZwpTabletToolV2ButtonStatePressed = 1
+	ZwpTabletToolV2ButtonStatePressed  = 1
 	ZwpTabletToolV2ButtonStateReleased = 0
 )
+
 // ZwpTabletToolV2Error values.
 const (
 	ZwpTabletToolV2ErrorRole = 0
@@ -566,6 +569,7 @@ func (o *ZwpTabletV2) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpTabletPadRingV2Source values.
 const (
 	ZwpTabletPadRingV2SourceFinger = 1
@@ -680,6 +684,7 @@ func (o *ZwpTabletPadRingV2) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpTabletPadStripV2Source values.
 const (
 	ZwpTabletPadStripV2SourceFinger = 1
@@ -915,9 +920,10 @@ func (o *ZwpTabletPadGroupV2) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpTabletPadV2ButtonState values.
 const (
-	ZwpTabletPadV2ButtonStatePressed = 1
+	ZwpTabletPadV2ButtonStatePressed  = 1
 	ZwpTabletPadV2ButtonStateReleased = 0
 )
 

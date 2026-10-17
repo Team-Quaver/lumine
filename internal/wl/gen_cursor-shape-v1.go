@@ -2,7 +2,6 @@
 
 package wl
 
-
 var wpCursorShapeManagerV1Iface = &Interface{
 	Name:    "wp_cursor_shape_manager_v1",
 	Version: 2,
@@ -73,45 +72,47 @@ func (o *WpCursorShapeManagerV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WpCursorShapeDeviceV1Shape values.
 const (
-	WpCursorShapeDeviceV1ShapeAlias = 11
-	WpCursorShapeDeviceV1ShapeAllResize = 36
-	WpCursorShapeDeviceV1ShapeAllScroll = 32
-	WpCursorShapeDeviceV1ShapeCell = 7
-	WpCursorShapeDeviceV1ShapeColResize = 30
-	WpCursorShapeDeviceV1ShapeContextMenu = 2
-	WpCursorShapeDeviceV1ShapeCopy = 12
-	WpCursorShapeDeviceV1ShapeCrosshair = 8
-	WpCursorShapeDeviceV1ShapeDefault = 1
-	WpCursorShapeDeviceV1ShapeDndAsk = 35
-	WpCursorShapeDeviceV1ShapeEResize = 18
-	WpCursorShapeDeviceV1ShapeEwResize = 26
-	WpCursorShapeDeviceV1ShapeGrab = 16
-	WpCursorShapeDeviceV1ShapeGrabbing = 17
-	WpCursorShapeDeviceV1ShapeHelp = 3
-	WpCursorShapeDeviceV1ShapeMove = 13
-	WpCursorShapeDeviceV1ShapeNResize = 19
-	WpCursorShapeDeviceV1ShapeNeResize = 20
-	WpCursorShapeDeviceV1ShapeNeswResize = 28
-	WpCursorShapeDeviceV1ShapeNoDrop = 14
-	WpCursorShapeDeviceV1ShapeNotAllowed = 15
-	WpCursorShapeDeviceV1ShapeNsResize = 27
-	WpCursorShapeDeviceV1ShapeNwResize = 21
-	WpCursorShapeDeviceV1ShapeNwseResize = 29
-	WpCursorShapeDeviceV1ShapePointer = 4
-	WpCursorShapeDeviceV1ShapeProgress = 5
-	WpCursorShapeDeviceV1ShapeRowResize = 31
-	WpCursorShapeDeviceV1ShapeSResize = 22
-	WpCursorShapeDeviceV1ShapeSeResize = 23
-	WpCursorShapeDeviceV1ShapeSwResize = 24
-	WpCursorShapeDeviceV1ShapeText = 9
+	WpCursorShapeDeviceV1ShapeAlias        = 11
+	WpCursorShapeDeviceV1ShapeAllResize    = 36
+	WpCursorShapeDeviceV1ShapeAllScroll    = 32
+	WpCursorShapeDeviceV1ShapeCell         = 7
+	WpCursorShapeDeviceV1ShapeColResize    = 30
+	WpCursorShapeDeviceV1ShapeContextMenu  = 2
+	WpCursorShapeDeviceV1ShapeCopy         = 12
+	WpCursorShapeDeviceV1ShapeCrosshair    = 8
+	WpCursorShapeDeviceV1ShapeDefault      = 1
+	WpCursorShapeDeviceV1ShapeDndAsk       = 35
+	WpCursorShapeDeviceV1ShapeEResize      = 18
+	WpCursorShapeDeviceV1ShapeEwResize     = 26
+	WpCursorShapeDeviceV1ShapeGrab         = 16
+	WpCursorShapeDeviceV1ShapeGrabbing     = 17
+	WpCursorShapeDeviceV1ShapeHelp         = 3
+	WpCursorShapeDeviceV1ShapeMove         = 13
+	WpCursorShapeDeviceV1ShapeNResize      = 19
+	WpCursorShapeDeviceV1ShapeNeResize     = 20
+	WpCursorShapeDeviceV1ShapeNeswResize   = 28
+	WpCursorShapeDeviceV1ShapeNoDrop       = 14
+	WpCursorShapeDeviceV1ShapeNotAllowed   = 15
+	WpCursorShapeDeviceV1ShapeNsResize     = 27
+	WpCursorShapeDeviceV1ShapeNwResize     = 21
+	WpCursorShapeDeviceV1ShapeNwseResize   = 29
+	WpCursorShapeDeviceV1ShapePointer      = 4
+	WpCursorShapeDeviceV1ShapeProgress     = 5
+	WpCursorShapeDeviceV1ShapeRowResize    = 31
+	WpCursorShapeDeviceV1ShapeSResize      = 22
+	WpCursorShapeDeviceV1ShapeSeResize     = 23
+	WpCursorShapeDeviceV1ShapeSwResize     = 24
+	WpCursorShapeDeviceV1ShapeText         = 9
 	WpCursorShapeDeviceV1ShapeVerticalText = 10
-	WpCursorShapeDeviceV1ShapeWResize = 25
-	WpCursorShapeDeviceV1ShapeWait = 6
-	WpCursorShapeDeviceV1ShapeZoomIn = 33
-	WpCursorShapeDeviceV1ShapeZoomOut = 34
+	WpCursorShapeDeviceV1ShapeWResize      = 25
+	WpCursorShapeDeviceV1ShapeWait         = 6
+	WpCursorShapeDeviceV1ShapeZoomIn       = 33
+	WpCursorShapeDeviceV1ShapeZoomOut      = 34
 )
+
 // WpCursorShapeDeviceV1Error values.
 const (
 	WpCursorShapeDeviceV1ErrorInvalidShape = 1

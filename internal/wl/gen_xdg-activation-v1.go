@@ -2,7 +2,6 @@
 
 package wl
 
-
 var xdgActivationV1Iface = &Interface{
 	Name:    "xdg_activation_v1",
 	Version: 1,
@@ -71,6 +70,7 @@ func (o *XdgActivationV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // XdgActivationTokenV1Error values.
 const (
 	XdgActivationTokenV1ErrorAlreadyUsed = 0

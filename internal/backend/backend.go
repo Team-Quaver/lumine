@@ -36,8 +36,8 @@ type Backend struct {
 	shm        *wl.WlShm
 	xdg        *wl.XdgWmBase
 
-	surface *wl.WlSurface
-	xdgSurf *wl.XdgSurface
+	surface  *wl.WlSurface
+	xdgSurf  *wl.XdgSurface
 	toplevel *wl.XdgToplevel
 
 	width, height int
@@ -47,9 +47,9 @@ type Backend struct {
 	// close (the user clicked its close button). It must not block.
 	OnClose func()
 
-	mu       sync.Mutex
-	bufs     []*frameBuf
-	closed   bool
+	mu     sync.Mutex
+	bufs   []*frameBuf
+	closed bool
 
 	// parent input
 	seat     *wl.WlSeat
@@ -307,9 +307,9 @@ func (h *wmBaseHandler) Ping(o *wl.XdgWmBase, serial uint32) { _ = o.ReqPong(ser
 
 type surfaceHandler struct{ b *Backend }
 
-func (h *surfaceHandler) Enter(o *wl.WlSurface, output *wl.WlOutput)                {}
-func (h *surfaceHandler) Leave(o *wl.WlSurface, output *wl.WlOutput)                {}
-func (h *surfaceHandler) PreferredBufferScale(o *wl.WlSurface, factor int32)        {}
+func (h *surfaceHandler) Enter(o *wl.WlSurface, output *wl.WlOutput)                 {}
+func (h *surfaceHandler) Leave(o *wl.WlSurface, output *wl.WlOutput)                 {}
+func (h *surfaceHandler) PreferredBufferScale(o *wl.WlSurface, factor int32)         {}
 func (h *surfaceHandler) PreferredBufferTransform(o *wl.WlSurface, transform uint32) {}
 
 type xdgSurfaceHandler struct{ b *Backend }
@@ -335,8 +335,8 @@ func (h *toplevelHandler) Close(o *wl.XdgToplevel) {
 		h.b.OnClose()
 	}
 }
-func (h *toplevelHandler) ConfigureBounds(o *wl.XdgToplevel, width, height int32)         {}
-func (h *toplevelHandler) WmCapabilities(o *wl.XdgToplevel, capabilities []byte)          {}
+func (h *toplevelHandler) ConfigureBounds(o *wl.XdgToplevel, width, height int32) {}
+func (h *toplevelHandler) WmCapabilities(o *wl.XdgToplevel, capabilities []byte)  {}
 
 // ---- buffer release ----
 
@@ -393,10 +393,10 @@ func (h *pointerHandler) Frame(o *wl.WlPointer) {
 		h.b.axisX, h.b.axisY = 0, 0
 	}
 }
-func (h *pointerHandler) AxisSource(o *wl.WlPointer, axisSource uint32)            {}
-func (h *pointerHandler) AxisStop(o *wl.WlPointer, time uint32, axis uint32)      {}
-func (h *pointerHandler) AxisDiscrete(o *wl.WlPointer, axis uint32, d int32)      {}
-func (h *pointerHandler) AxisValue120(o *wl.WlPointer, axis uint32, v int32)      {}
+func (h *pointerHandler) AxisSource(o *wl.WlPointer, axisSource uint32)                  {}
+func (h *pointerHandler) AxisStop(o *wl.WlPointer, time uint32, axis uint32)             {}
+func (h *pointerHandler) AxisDiscrete(o *wl.WlPointer, axis uint32, d int32)             {}
+func (h *pointerHandler) AxisValue120(o *wl.WlPointer, axis uint32, v int32)             {}
 func (h *pointerHandler) AxisRelativeDirection(o *wl.WlPointer, axis uint32, dir uint32) {}
 func (h *pointerHandler) Warp(o *wl.WlPointer, sx, sy wl.Fixed) {
 	h.b.input.MotionAbs(sx.Float(), sy.Float())
@@ -411,8 +411,9 @@ func (h *keyboardHandler) Keymap(o *wl.WlKeyboard, format uint32, fd int, size u
 	unix.Close(fd)
 }
 
-func (h *keyboardHandler) Enter(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface, keys []byte) {}
-func (h *keyboardHandler) Leave(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface)            {}
+func (h *keyboardHandler) Enter(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface, keys []byte) {
+}
+func (h *keyboardHandler) Leave(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface) {}
 func (h *keyboardHandler) Key(o *wl.WlKeyboard, serial uint32, time uint32, key uint32, state uint32) {
 	pressed := state == wl.WlKeyboardKeyStatePressed || state == wl.WlKeyboardKeyStateRepeated
 	h.b.input.Key(key, pressed)

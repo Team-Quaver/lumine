@@ -63,11 +63,12 @@ func (o *WpViewporter) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WpViewportError values.
 const (
-	WpViewportErrorBadSize = 1
-	WpViewportErrorBadValue = 0
-	WpViewportErrorNoSurface = 3
+	WpViewportErrorBadSize     = 1
+	WpViewportErrorBadValue    = 0
+	WpViewportErrorNoSurface   = 3
 	WpViewportErrorOutOfBuffer = 2
 )
 

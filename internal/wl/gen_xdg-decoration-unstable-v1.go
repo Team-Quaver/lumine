@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zxdgDecorationManagerV1Iface = &Interface{
 	Name:    "zxdg_decoration_manager_v1",
 	Version: 2,
@@ -59,13 +58,15 @@ func (o *ZxdgDecorationManagerV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZxdgToplevelDecorationV1Error values.
 const (
 	ZxdgToplevelDecorationV1ErrorAlreadyConstructed = 1
-	ZxdgToplevelDecorationV1ErrorInvalidMode = 3
-	ZxdgToplevelDecorationV1ErrorOrphaned = 2
+	ZxdgToplevelDecorationV1ErrorInvalidMode        = 3
+	ZxdgToplevelDecorationV1ErrorOrphaned           = 2
 	ZxdgToplevelDecorationV1ErrorUnconfiguredBuffer = 0
 )
+
 // ZxdgToplevelDecorationV1Mode values.
 const (
 	ZxdgToplevelDecorationV1ModeClientSide = 1

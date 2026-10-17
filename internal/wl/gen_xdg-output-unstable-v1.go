@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zxdgOutputManagerV1Iface = &Interface{
 	Name:    "zxdg_output_manager_v1",
 	Version: 3,

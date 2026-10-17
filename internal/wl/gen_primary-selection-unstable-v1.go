@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zwpPrimarySelectionDeviceManagerV1Iface = &Interface{
 	Name:    "zwp_primary_selection_device_manager_v1",
 	Version: 1,

@@ -5,7 +5,7 @@ package wl
 // ZwpVirtualKeyboardV1Error values.
 const (
 	ZwpVirtualKeyboardV1ErrorInvalidKeymapFormat = 1
-	ZwpVirtualKeyboardV1ErrorNoKeymap = 0
+	ZwpVirtualKeyboardV1ErrorNoKeymap            = 0
 )
 
 var zwpVirtualKeyboardV1Iface = &Interface{
@@ -93,6 +93,7 @@ func (o *ZwpVirtualKeyboardV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpVirtualKeyboardManagerV1Error values.
 const (
 	ZwpVirtualKeyboardManagerV1ErrorUnauthorized = 0

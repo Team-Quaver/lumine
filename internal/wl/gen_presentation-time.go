@@ -4,7 +4,7 @@ package wl
 
 // WpPresentationError values.
 const (
-	WpPresentationErrorInvalidFlag = 1
+	WpPresentationErrorInvalidFlag      = 1
 	WpPresentationErrorInvalidTimestamp = 0
 )
 
@@ -86,12 +86,13 @@ func (o *WpPresentation) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // WpPresentationFeedbackKind values.
 const (
-	WpPresentationFeedbackKindHwClock = 0x2
+	WpPresentationFeedbackKindHwClock      = 0x2
 	WpPresentationFeedbackKindHwCompletion = 0x4
-	WpPresentationFeedbackKindVsync = 0x1
-	WpPresentationFeedbackKindZeroCopy = 0x8
+	WpPresentationFeedbackKindVsync        = 0x1
+	WpPresentationFeedbackKindZeroCopy     = 0x8
 )
 
 var wpPresentationFeedbackIface = &Interface{

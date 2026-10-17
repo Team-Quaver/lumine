@@ -107,36 +107,41 @@ func (o *WpColorRepresentationManagerV1) dispatch(opcode uint16, r *wireReader) 
 		}
 	}
 }
+
 // WpColorRepresentationSurfaceV1Error values.
 const (
-	WpColorRepresentationSurfaceV1ErrorAlphaMode = 1
+	WpColorRepresentationSurfaceV1ErrorAlphaMode      = 1
 	WpColorRepresentationSurfaceV1ErrorChromaLocation = 5
-	WpColorRepresentationSurfaceV1ErrorCoefficients = 2
-	WpColorRepresentationSurfaceV1ErrorInert = 4
-	WpColorRepresentationSurfaceV1ErrorPixelFormat = 3
+	WpColorRepresentationSurfaceV1ErrorCoefficients   = 2
+	WpColorRepresentationSurfaceV1ErrorInert          = 4
+	WpColorRepresentationSurfaceV1ErrorPixelFormat    = 3
 )
+
 // WpColorRepresentationSurfaceV1AlphaMode values.
 const (
 	WpColorRepresentationSurfaceV1AlphaModePremultipliedElectrical = 0
-	WpColorRepresentationSurfaceV1AlphaModePremultipliedOptical = 1
-	WpColorRepresentationSurfaceV1AlphaModeStraight = 2
+	WpColorRepresentationSurfaceV1AlphaModePremultipliedOptical    = 1
+	WpColorRepresentationSurfaceV1AlphaModeStraight                = 2
 )
+
 // WpColorRepresentationSurfaceV1Coefficients values.
 const (
-	WpColorRepresentationSurfaceV1CoefficientsBt2020 = 6
+	WpColorRepresentationSurfaceV1CoefficientsBt2020   = 6
 	WpColorRepresentationSurfaceV1CoefficientsBt2020Cl = 7
-	WpColorRepresentationSurfaceV1CoefficientsBt601 = 4
-	WpColorRepresentationSurfaceV1CoefficientsBt709 = 2
-	WpColorRepresentationSurfaceV1CoefficientsFcc = 3
-	WpColorRepresentationSurfaceV1CoefficientsIctcp = 8
+	WpColorRepresentationSurfaceV1CoefficientsBt601    = 4
+	WpColorRepresentationSurfaceV1CoefficientsBt709    = 2
+	WpColorRepresentationSurfaceV1CoefficientsFcc      = 3
+	WpColorRepresentationSurfaceV1CoefficientsIctcp    = 8
 	WpColorRepresentationSurfaceV1CoefficientsIdentity = 1
 	WpColorRepresentationSurfaceV1CoefficientsSmpte240 = 5
 )
+
 // WpColorRepresentationSurfaceV1Range values.
 const (
-	WpColorRepresentationSurfaceV1RangeFull = 1
+	WpColorRepresentationSurfaceV1RangeFull    = 1
 	WpColorRepresentationSurfaceV1RangeLimited = 2
 )
+
 // WpColorRepresentationSurfaceV1ChromaLocation values.
 const (
 	WpColorRepresentationSurfaceV1ChromaLocationType0 = 1

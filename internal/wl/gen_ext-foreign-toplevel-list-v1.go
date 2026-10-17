@@ -2,7 +2,6 @@
 
 package wl
 
-
 var extForeignToplevelListV1Iface = &Interface{
 	Name:    "ext_foreign_toplevel_list_v1",
 	Version: 1,

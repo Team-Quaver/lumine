@@ -16,10 +16,10 @@ import (
 // Global is a protocol object advertised on wl_registry. Bind is called when
 // a client binds the global; it must create the server-side resource.
 type Global struct {
-	Name   uint32
-	Iface  string
+	Name    uint32
+	Iface   string
 	Version uint32
-	Bind   func(c *Conn, id uint32, version uint32)
+	Bind    func(c *Conn, id uint32, version uint32)
 }
 
 // Server listens for Wayland clients.

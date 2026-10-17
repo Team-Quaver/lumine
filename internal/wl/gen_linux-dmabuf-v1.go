@@ -2,7 +2,6 @@
 
 package wl
 
-
 var zwpLinuxDmabufV1Iface = &Interface{
 	Name:    "zwp_linux_dmabuf_v1",
 	Version: 6,
@@ -120,23 +119,25 @@ func (o *ZwpLinuxDmabufV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpLinuxBufferParamsV1Error values.
 const (
-	ZwpLinuxBufferParamsV1ErrorAlreadyUsed = 0
-	ZwpLinuxBufferParamsV1ErrorIncomplete = 3
-	ZwpLinuxBufferParamsV1ErrorInvalidDevTSize = 8
+	ZwpLinuxBufferParamsV1ErrorAlreadyUsed       = 0
+	ZwpLinuxBufferParamsV1ErrorIncomplete        = 3
+	ZwpLinuxBufferParamsV1ErrorInvalidDevTSize   = 8
 	ZwpLinuxBufferParamsV1ErrorInvalidDimensions = 5
-	ZwpLinuxBufferParamsV1ErrorInvalidFormat = 4
-	ZwpLinuxBufferParamsV1ErrorInvalidWlBuffer = 7
-	ZwpLinuxBufferParamsV1ErrorOutOfBounds = 6
-	ZwpLinuxBufferParamsV1ErrorPlaneIdx = 1
-	ZwpLinuxBufferParamsV1ErrorPlaneSet = 2
+	ZwpLinuxBufferParamsV1ErrorInvalidFormat     = 4
+	ZwpLinuxBufferParamsV1ErrorInvalidWlBuffer   = 7
+	ZwpLinuxBufferParamsV1ErrorOutOfBounds       = 6
+	ZwpLinuxBufferParamsV1ErrorPlaneIdx          = 1
+	ZwpLinuxBufferParamsV1ErrorPlaneSet          = 2
 )
+
 // ZwpLinuxBufferParamsV1Flags values.
 const (
 	ZwpLinuxBufferParamsV1FlagsBottomFirst = 4
-	ZwpLinuxBufferParamsV1FlagsInterlaced = 2
-	ZwpLinuxBufferParamsV1FlagsYInvert = 1
+	ZwpLinuxBufferParamsV1FlagsInterlaced  = 2
+	ZwpLinuxBufferParamsV1FlagsYInvert     = 1
 )
 
 var zwpLinuxBufferParamsV1Iface = &Interface{
@@ -274,10 +275,11 @@ func (o *ZwpLinuxBufferParamsV1) dispatch(opcode uint16, r *wireReader) {
 		}
 	}
 }
+
 // ZwpLinuxDmabufFeedbackV1TrancheFlags values.
 const (
 	ZwpLinuxDmabufFeedbackV1TrancheFlagsSampling = 2
-	ZwpLinuxDmabufFeedbackV1TrancheFlagsScanout = 1
+	ZwpLinuxDmabufFeedbackV1TrancheFlagsScanout  = 1
 )
 
 var zwpLinuxDmabufFeedbackV1Iface = &Interface{

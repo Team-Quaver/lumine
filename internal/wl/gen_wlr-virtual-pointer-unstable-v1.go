@@ -4,7 +4,7 @@ package wl
 
 // ZwlrVirtualPointerV1Error values.
 const (
-	ZwlrVirtualPointerV1ErrorInvalidAxis = 0
+	ZwlrVirtualPointerV1ErrorInvalidAxis       = 0
 	ZwlrVirtualPointerV1ErrorInvalidAxisSource = 1
 )
 
