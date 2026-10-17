@@ -785,9 +785,13 @@ func (c *Compositor) handleCommand(cmd, arg string) any {
 		for o, tree := range c.trees {
 			var wins []map[string]any
 			for _, w := range tree.Windows() {
+				r := w.Rect
+				if s := c.surfaceForWinLocked(w.ID); s != nil {
+					r = effectiveRect(o, w, s)
+				}
 				wins = append(wins, map[string]any{
 					"id": w.ID, "title": w.Title, "app_id": w.AppID,
-					"rect": itoa(int(w.Rect.W)) + "x" + itoa(int(w.Rect.H)) + "@" + itoa(int(w.Rect.X)) + "," + itoa(int(w.Rect.Y)),
+					"rect": itoa(int(r.W)) + "x" + itoa(int(r.H)) + "@" + itoa(int(r.X)) + "," + itoa(int(r.Y)),
 				})
 			}
 			out = append(out, map[string]any{"output": o.Name, "mode": string(tree.Mode), "windows": wins})
