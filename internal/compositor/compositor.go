@@ -396,9 +396,9 @@ func (c *Compositor) Key(code uint32, pressed bool) bool {
 			return c.runActionLocked(binding)
 		}
 	}
-	// keycodes are evdev scancodes offset by 8, matching the xkb keymap we
-	// advertise on wl_keyboard.keymap.
-	evdev := code + 8
+	// wl_keyboard.key events carry raw evdev scancodes. The advertised XKB
+	// keymap lets clients map them; do not apply the XKB +8 offset here.
+	evdev := code
 	if pressed {
 		for _, k := range c.kbHeldKeys {
 			if k == evdev {

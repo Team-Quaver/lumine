@@ -6,6 +6,7 @@ package wl
 import (
 	"encoding/binary"
 	"fmt"
+	"reflect"
 )
 
 // Object ID ranges from the Wayland specification: clients allocate from
@@ -141,7 +142,11 @@ func encodeArgs(iface string, m *Message, args []any) (*wireWriter, error) {
 			case uint32:
 				w.uint32(v)
 			default:
-				return nil, argErr(iface, m, a)
+				id, ok := embeddedObjectID(a)
+				if !ok {
+					return nil, argErr(iface, m, a)
+				}
+				w.uint32(id)
 			}
 		case ArgArray:
 			v, ok := a.([]byte)
@@ -162,6 +167,25 @@ func encodeArgs(iface string, m *Message, args []any) (*wireWriter, error) {
 
 func argErr(iface string, m *Message, a any) error {
 	return fmt.Errorf("wl: %s.%s: bad argument %T", iface, m.Name, a)
+}
+
+// embeddedObjectID returns the wire id of a generated resource type. Every
+// resource embeds Object by value, and the generated send helpers pass those
+// typed pointers (e.g. *WlSurface) rather than *Object. A typed nil pointer
+// encodes as the null object id 0.
+func embeddedObjectID(a any) (uint32, bool) {
+	v := reflect.ValueOf(a)
+	if !v.IsValid() || v.Kind() != reflect.Ptr {
+		return 0, false
+	}
+	if v.IsNil() {
+		return 0, true
+	}
+	obj := v.Elem().FieldByName("Object")
+	if !obj.IsValid() || obj.Type() != reflect.TypeOf(Object{}) {
+		return 0, false
+	}
+	return uint32(obj.FieldByName("ID").Uint()), true
 }
 
 func header(id uint32, opcode uint16, size int) []byte {

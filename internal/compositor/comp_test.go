@@ -78,6 +78,7 @@ type testClient struct {
 	keymapSeen    bool
 	keymapText    string
 	keyboardEnter bool
+	keyboardKeys  []keyEvent
 	windowTitle   string
 	closeCount    int
 	descReady     bool
@@ -189,7 +190,17 @@ func (c *testClient) Enter(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurfac
 }
 
 func (c *testClient) Leave(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface) {}
-func (c *testClient) Key(o *wl.WlKeyboard, serial, time uint32, key, state uint32) {}
+
+type keyEvent struct {
+	key   uint32
+	state uint32
+}
+
+func (c *testClient) Key(o *wl.WlKeyboard, serial, time uint32, key, state uint32) {
+	c.mu.Lock()
+	c.keyboardKeys = append(c.keyboardKeys, keyEvent{key: key, state: state})
+	c.mu.Unlock()
+}
 func (c *testClient) Modifiers(o *wl.WlKeyboard, serial, deprecated, latched, locked, group uint32) {
 }
 func (c *testClient) RepeatInfo(o *wl.WlKeyboard, rate, delay int32) {}
@@ -442,6 +453,24 @@ func TestServesShmToplevel(t *testing.T) {
 
 	c.wait(func() bool { return c.released }, "wl_buffer.release")
 	c.wait(func() bool { return c.frameDone }, "wl_callback.done")
+
+	// Keyboard events are forwarded with raw evdev keycodes. In particular,
+	// do not apply the XKB +8 offset here: clients add it themselves when they
+	// resolve the advertised keymap.
+	c.wait(func() bool { return c.keyboardEnter }, "wl_keyboard.enter")
+	comp.Key(30, true) // KEY_A
+	comp.Key(30, false)
+	c.wait(func() bool { return len(c.keyboardKeys) >= 2 }, "wl_keyboard.key")
+	c.mu.Lock()
+	keys := append([]keyEvent(nil), c.keyboardKeys...)
+	c.mu.Unlock()
+	if len(keys) != 2 {
+		t.Fatalf("got %d key events, want 2: %+v", len(keys), keys)
+	}
+	if keys[0] != (keyEvent{key: 30, state: wl.WlKeyboardKeyStatePressed}) ||
+		keys[1] != (keyEvent{key: 30, state: wl.WlKeyboardKeyStateReleased}) {
+		t.Fatalf("forwarded keys = %+v, want raw KEY_A press/release", keys)
+	}
 
 	// The compositor must have drawn the client's pixels into the tile.
 	items, frames := rd.snapshot()
