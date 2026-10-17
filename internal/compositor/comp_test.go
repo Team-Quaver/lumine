@@ -1,6 +1,7 @@
 package compositor_test
 
 import (
+	"encoding/binary"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -66,6 +67,12 @@ type testClient struct {
 	configured    bool
 	cfgW, cfgH    int32
 	toplevelCfg   bool
+	capsSeen      bool
+	caps          []uint32
+	tlStates      []uint32
+	seq           int
+	capsSeq       int
+	configureSeq  int
 	released      bool
 	frameDone     bool
 	keymapSeen    bool
@@ -94,6 +101,10 @@ type surfaceEvents struct{ c *testClient }
 func (h *surfaceEvents) Configure(o *wl.XdgSurface, serial uint32) {
 	_ = o.ReqAckConfigure(serial)
 	h.c.mu.Lock()
+	h.c.seq++
+	if h.c.configureSeq == 0 {
+		h.c.configureSeq = h.c.seq
+	}
 	h.c.configured = true
 	h.c.mu.Unlock()
 }
@@ -105,7 +116,26 @@ func (h *toplevelEvents) Configure(o *wl.XdgToplevel, width, height int32, state
 	h.c.mu.Lock()
 	h.c.toplevelCfg = true
 	h.c.cfgW, h.c.cfgH = width, height
+	h.c.tlStates = decodeStates(states)
 	h.c.mu.Unlock()
+}
+
+// decodeStates unpacks the xdg_toplevel.configure state array into enum values.
+func decodeStates(raw []byte) []uint32 {
+	out := make([]uint32, 0, len(raw)/4)
+	for i := 0; i+4 <= len(raw); i += 4 {
+		out = append(out, binary.NativeEndian.Uint32(raw[i:]))
+	}
+	return out
+}
+
+func containsState(states []uint32, want uint32) bool {
+	for _, v := range states {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *toplevelEvents) Close(o *wl.XdgToplevel) {
@@ -115,7 +145,15 @@ func (h *toplevelEvents) Close(o *wl.XdgToplevel) {
 }
 
 func (h *toplevelEvents) ConfigureBounds(o *wl.XdgToplevel, width, height int32) {}
-func (h *toplevelEvents) WmCapabilities(o *wl.XdgToplevel, capabilities []byte)  {}
+
+func (h *toplevelEvents) WmCapabilities(o *wl.XdgToplevel, capabilities []byte) {
+	h.c.mu.Lock()
+	h.c.seq++
+	h.c.capsSeen = true
+	h.c.capsSeq = h.c.seq
+	h.c.caps = decodeStates(capabilities)
+	h.c.mu.Unlock()
+}
 
 func (c *testClient) Release(o *wl.WlBuffer) {
 	c.mu.Lock()
@@ -188,6 +226,42 @@ func (c *testClient) wait(pred func() bool, what string) {
 			}
 		}
 	}
+}
+
+// commitShmFrame attaches and commits a bw x bh XRGB8888 wl_shm buffer on
+// c.surf so the compositor has client pixels to draw for that surface.
+func (c *testClient) commitShmFrame(bw, bh int) {
+	c.t.Helper()
+	stride := bw * 4
+	fd, err := unix.MemfdCreate("lumine-frame", unix.MFD_CLOEXEC)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer unix.Close(fd)
+	if err := unix.Ftruncate(fd, int64(stride*bh)); err != nil {
+		c.t.Fatal(err)
+	}
+	pool := wl.NewWlShmPool(c.con, c.con.AllocID(), 1, nil)
+	if err := c.shm.ReqCreatePool(&pool.Object, fd, int32(stride*bh)); err != nil {
+		c.t.Fatal(err)
+	}
+	buf := wl.NewWlBuffer(c.con, c.con.AllocID(), 1, c)
+	if err := pool.ReqCreateBuffer(&buf.Object, 0, int32(bw), int32(bh), int32(stride), uint32(shm.XRGB8888)); err != nil {
+		c.t.Fatal(err)
+	}
+	if err := c.surf.ReqAttach(&buf.Object, 0, 0); err != nil {
+		c.t.Fatal(err)
+	}
+	if err := c.surf.ReqDamageBuffer(0, 0, int32(bw), int32(bh)); err != nil {
+		c.t.Fatal(err)
+	}
+	if err := c.surf.ReqCommit(); err != nil {
+		c.t.Fatal(err)
+	}
+	if err := c.con.Flush(); err != nil {
+		c.t.Fatal(err)
+	}
+	c.buf = buf
 }
 
 // startHarness boots a compositor with a capture renderer and a 60 Hz frame
@@ -531,6 +605,111 @@ func TestShmBufferOutlivesPool(t *testing.T) {
 	if !found {
 		t.Fatal("renderer never received the buffer committed after pool destroy")
 	}
+}
+
+// TestToplevelWmCapabilitiesAndMaximize checks the xdg-shell contract GLFW
+// (and therefore kitty) depends on: the compositor must send wm_capabilities
+// advertising maximize *before* the first xdg_surface.configure, and a
+// set_maximized request must produce a configure with the maximized state at
+// the output size. Missing this made GLFW fail with "compositor does not
+// support maximizing windows".
+func TestToplevelWmCapabilitiesAndMaximize(t *testing.T) {
+	sock, rd, _ := startHarness(t)
+	con, c := dialClient(t, sock)
+	reg := c.reg
+
+	c.comp = wl.NewWlCompositor(con, con.AllocID(), 4, nil)
+	if err := reg.ReqBind(c.names["wl_compositor"], "wl_compositor", 4, &c.comp.Object); err != nil {
+		t.Fatal(err)
+	}
+	c.shm = wl.NewWlShm(con, con.AllocID(), 1, nil)
+	if err := reg.ReqBind(c.names["wl_shm"], "wl_shm", 1, &c.shm.Object); err != nil {
+		t.Fatal(err)
+	}
+	c.xdg = wl.NewXdgWmBase(con, con.AllocID(), 5, nil)
+	if err := reg.ReqBind(c.names["xdg_wm_base"], "xdg_wm_base", 5, &c.xdg.Object); err != nil {
+		t.Fatal(err)
+	}
+	c.surf = wl.NewWlSurface(con, con.AllocID(), 4, nil)
+	if err := c.comp.ReqCreateSurface(&c.surf.Object); err != nil {
+		t.Fatal(err)
+	}
+	c.xdgSurf = wl.NewXdgSurface(con, con.AllocID(), 5, &surfaceEvents{c})
+	if err := c.xdg.ReqGetXdgSurface(&c.xdgSurf.Object, &c.surf.Object); err != nil {
+		t.Fatal(err)
+	}
+	c.toplevel = wl.NewXdgToplevel(con, con.AllocID(), 5, &toplevelEvents{c})
+	if err := c.xdgSurf.ReqGetToplevel(&c.toplevel.Object); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.toplevel.ReqSetAppId("lumine-caps"); err != nil {
+		t.Fatal(err)
+	}
+	c.commitShmFrame(64, 48)
+	if err := c.surf.ReqCommit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := con.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	c.wait(func() bool { return c.capsSeen && c.configured }, "wm_capabilities + configure")
+
+	c.mu.Lock()
+	caps, capsSeq, cfgSeq := append([]uint32(nil), c.caps...), c.capsSeq, c.configureSeq
+	c.mu.Unlock()
+
+	if !containsState(caps, wl.XdgToplevelWmCapabilitiesMaximize) {
+		t.Fatalf("wm_capabilities %v does not advertise maximize", caps)
+	}
+	if !containsState(caps, wl.XdgToplevelWmCapabilitiesFullscreen) {
+		t.Fatalf("wm_capabilities %v does not advertise fullscreen", caps)
+	}
+	if capsSeq == 0 || cfgSeq == 0 || capsSeq > cfgSeq {
+		t.Fatalf("wm_capabilities must precede the first configure (capsSeq=%d configureSeq=%d)", capsSeq, cfgSeq)
+	}
+
+	// Maximize: expect a configure with the maximized state at the output size.
+	if err := c.toplevel.ReqSetMaximized(); err != nil {
+		t.Fatal(err)
+	}
+	if err := con.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	c.wait(func() bool {
+		return containsState(c.tlStates, wl.XdgToplevelStateMaximized)
+	}, "xdg_toplevel.configure with maximized state")
+
+	c.mu.Lock()
+	states, w, h := append([]uint32(nil), c.tlStates...), c.cfgW, c.cfgH
+	c.mu.Unlock()
+	if !containsState(states, wl.XdgToplevelStateMaximized) {
+		t.Fatalf("configure states %v missing maximized", states)
+	}
+	if w != 800 || h != 600 {
+		t.Fatalf("maximized configure is %dx%d, want the 800x600 output", w, h)
+	}
+
+	// The renderer must draw the window covering the whole output.
+	c.wait(func() bool {
+		items, _ := rd.snapshot()
+		for _, it := range items {
+			if it.AppID == "lumine-caps" && it.W == 800 && it.H == 600 && it.X == 0 && it.Y == 0 {
+				return true
+			}
+		}
+		return false
+	}, "maximized window drawn at output size")
+
+	// Unmaximize returns the window to its tiling rect.
+	if err := c.toplevel.ReqUnsetMaximized(); err != nil {
+		t.Fatal(err)
+	}
+	if err := con.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	c.wait(func() bool {
+		return !containsState(c.tlStates, wl.XdgToplevelStateMaximized)
+	}, "xdg_toplevel.configure without maximized state")
 }
 
 // descEvents implements wl.WpImageDescriptionV1Events, recording whether the

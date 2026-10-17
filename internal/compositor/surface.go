@@ -65,6 +65,12 @@ type Surface struct {
 	deco      *wl.ZxdgToplevelDecorationV1
 	decorMode uint32 // 0 unset, 1 SSD, 2 CSD
 
+	// xdg_toplevel maximize/fullscreen state. Both make the window cover the
+	// whole output; the layout still computes the underlying tiling rect so the
+	// window returns to its slot on unset.
+	maximized  bool
+	fullscreen bool
+
 	// srcColor is the wp_color_manager surface image description, if a client
 	// assigned one. Nil means "untagged" (the client is treated as sRGB).
 	srcColor *imageDesc
@@ -87,6 +93,8 @@ type Surface struct {
 	cfgSent    bool
 	cfgW, cfgH int32
 	cfgFocused bool
+	cfgMax     bool
+	cfgFull    bool
 
 	// owned is the compositor's private copy of the committed buffer, so the
 	// renderer never touches client memory after the commit (the client may
@@ -433,6 +441,13 @@ func (h *xdgSurfaceHandler) GetToplevel(o *wl.XdgSurface, id *wl.XdgToplevel) {
 	defer c.mu.Unlock()
 	h.s.toplevel = id
 	id.Impl = &toplevelHandler{c: c, s: h.s}
+	// xdg-shell v5 requires wm_capabilities before the first xdg_surface.configure.
+	// Send it before the output check: a toplevel may be created before an output
+	// is available, but the capability event must still precede any later configure.
+	// Older bindings must not receive the event at all.
+	if id.Version >= 5 {
+		id.WmCapabilities(wmCapabilities())
+	}
 	tree := c.primaryTreeLocked()
 	if tree == nil {
 		return
@@ -442,10 +457,24 @@ func (h *xdgSurfaceHandler) GetToplevel(o *wl.XdgSurface, id *wl.XdgToplevel) {
 	// Initial configure: full output size minus a margin; layout refines on
 	// the next frame.
 	if out := c.primaryOutputLocked(); out != nil {
-		states := []byte{}
-		id.Configure(int32(out.W), int32(out.H), states)
+		id.Configure(int32(out.W), int32(out.H), h.s.toplevelState(false))
 	}
 	o.Configure(c.nextSerial())
+}
+
+// wmCapabilities builds the xdg_toplevel.wm_capabilities array. Lumine honours
+// maximize and fullscreen by covering the output. window_menu and minimize are
+// intentionally not advertised because those requests are not implemented.
+func wmCapabilities() []byte {
+	caps := []uint32{
+		wl.XdgToplevelWmCapabilitiesMaximize,
+		wl.XdgToplevelWmCapabilitiesFullscreen,
+	}
+	buf := make([]byte, 4*len(caps))
+	for i, c := range caps {
+		binary.NativeEndian.PutUint32(buf[i*4:], c)
+	}
+	return buf
 }
 
 func (h *xdgSurfaceHandler) GetPopup(o *wl.XdgSurface, id *wl.XdgPopup, parent *wl.XdgSurface, positioner *wl.XdgPositioner) {
@@ -500,21 +529,66 @@ func (h *toplevelHandler) Move(o *wl.XdgToplevel, seat *wl.WlSeat, serial uint32
 func (h *toplevelHandler) Resize(o *wl.XdgToplevel, seat *wl.WlSeat, serial uint32, edges uint32) {}
 func (h *toplevelHandler) SetMaxSize(o *wl.XdgToplevel, width, height int32)                      {}
 func (h *toplevelHandler) SetMinSize(o *wl.XdgToplevel, width, height int32)                      {}
-func (h *toplevelHandler) SetMaximized(o *wl.XdgToplevel)                                         {}
-func (h *toplevelHandler) UnsetMaximized(o *wl.XdgToplevel)                                       {}
-func (h *toplevelHandler) SetFullscreen(o *wl.XdgToplevel, output *wl.WlOutput)                   {}
-func (h *toplevelHandler) UnsetFullscreen(o *wl.XdgToplevel)                                      {}
-func (h *toplevelHandler) SetMinimized(o *wl.XdgToplevel)                                         {}
+
+// SetMaximized / UnsetMaximized make the window cover its output; the next
+// frame re-configures it with (or without) the maximized state.
+func (h *toplevelHandler) SetMaximized(o *wl.XdgToplevel)   { h.setMaximizedLocked(true) }
+func (h *toplevelHandler) UnsetMaximized(o *wl.XdgToplevel) { h.setMaximizedLocked(false) }
+
+func (h *toplevelHandler) SetFullscreen(o *wl.XdgToplevel, output *wl.WlOutput) {
+	h.c.mu.Lock()
+	defer h.c.mu.Unlock()
+	if h.s.fullscreen {
+		return
+	}
+	h.s.fullscreen = true
+	h.s.cfgSent = false
+}
+
+func (h *toplevelHandler) UnsetFullscreen(o *wl.XdgToplevel) {
+	h.c.mu.Lock()
+	defer h.c.mu.Unlock()
+	if !h.s.fullscreen {
+		return
+	}
+	h.s.fullscreen = false
+	h.s.cfgSent = false
+}
+
+// SetMinimized is ignored defensively. Minimize is not advertised because
+// Lumine has no task switcher.
+func (h *toplevelHandler) SetMinimized(o *wl.XdgToplevel) {}
 
 // toplevelState builds the xdg_toplevel state array for a configure.
 func (s *Surface) toplevelState(focused bool) []byte {
-	var states []byte
-	if focused {
+	add := func(v uint32) []byte {
 		buf := make([]byte, 4)
-		binary.LittleEndian.PutUint32(buf, 2) // activated
-		states = append(states, buf...)
+		binary.NativeEndian.PutUint32(buf, v)
+		return buf
+	}
+	var states []byte
+	if s.maximized {
+		states = append(states, add(wl.XdgToplevelStateMaximized)...)
+	}
+	if s.fullscreen {
+		states = append(states, add(wl.XdgToplevelStateFullscreen)...)
+	}
+	if focused {
+		states = append(states, add(wl.XdgToplevelStateActivated)...)
 	}
 	return states
+}
+
+// setMaximizedLocked / setFullscreenLocked record a client maximize/fullscreen
+// request and force a configure so the state reaches the client.
+func (h *toplevelHandler) setMaximizedLocked(on bool) {
+	h.c.mu.Lock()
+	defer h.c.mu.Unlock()
+	if h.s.maximized == on {
+		return
+	}
+	h.s.maximized = on
+	h.s.cfgSent = false // force re-configure with the new state
 }
 
 // ---- xdg-decoration (CSD/SSD coexistence) ----

@@ -261,9 +261,10 @@ func (c *Compositor) Frame() {
 			if s == nil || s.image == nil {
 				continue
 			}
+			r := effectiveRect(o, w, s)
 			items = append(items, DrawItem{
-				Image: s.image, X: w.Rect.X, Y: w.Rect.Y,
-				W: w.Rect.W, H: w.Rect.H, Activated: w.ID == focused,
+				Image: s.image, X: r.X, Y: r.Y,
+				W: r.W, H: r.H, Activated: w.ID == focused,
 				Frame: s.serverDecorated(), Title: s.windowTitle(), AppID: s.appID,
 			})
 		}
@@ -350,16 +351,19 @@ func (c *Compositor) applyConfiguresLocked(o *Output, focused uint64) {
 		if s == nil || s.toplevel == nil {
 			continue
 		}
-		w0, h0 := int32(w.Rect.W), int32(w.Rect.H)
+		r := effectiveRect(o, w, s)
+		w0, h0 := int32(r.W), int32(r.H)
 		foc := w.ID == focused
 		// Skip identical configures: the frame pump runs at 60 Hz and a
 		// configure per frame would be a storm. The client is already at this
 		// size/state (it acked the configure that produced it), so re-sending
 		// buys nothing.
-		if s.cfgSent && s.cfgW == w0 && s.cfgH == h0 && s.cfgFocused == foc {
+		if s.cfgSent && s.cfgW == w0 && s.cfgH == h0 && s.cfgFocused == foc &&
+			s.cfgMax == s.maximized && s.cfgFull == s.fullscreen {
 			continue
 		}
 		s.cfgSent, s.cfgW, s.cfgH, s.cfgFocused = true, w0, h0, foc
+		s.cfgMax, s.cfgFull = s.maximized, s.fullscreen
 		s.toplevel.Configure(w0, h0, s.toplevelState(foc))
 		s.xdg.Configure(c.nextSerial())
 	}
@@ -671,17 +675,30 @@ func (c *Compositor) sendModifiersLocked() {
 }
 
 func (c *Compositor) surfaceAtLocked(x, y float64) *Surface {
-	for _, tree := range c.trees {
+	for o, tree := range c.trees {
 		for _, w := range tree.Windows() {
-			if x >= w.Rect.X && x < w.Rect.X+w.Rect.W && y >= w.Rect.Y && y < w.Rect.Y+w.Rect.H {
-				if s := c.surfaceForWinLocked(w.ID); s != nil {
-					s.rect = w.Rect
-					return s
-				}
+			s := c.surfaceForWinLocked(w.ID)
+			if s == nil {
+				continue
+			}
+			r := effectiveRect(o, w, s)
+			if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+				s.rect = r
+				return s
 			}
 		}
 	}
 	return nil
+}
+
+// effectiveRect reports the on-screen geometry for a window: its tiling rect,
+// or the whole output when the client maximized or went fullscreen. Keeping
+// this in one place keeps drawing, configuring and hit-testing consistent.
+func effectiveRect(o *Output, w *layout.Win, s *Surface) layout.Rect {
+	if s != nil && (s.maximized || s.fullscreen) {
+		return layout.Rect{X: 0, Y: 0, W: float64(o.W), H: float64(o.H)}
+	}
+	return w.Rect
 }
 
 func (c *Compositor) primaryOutputLocked() *Output {
