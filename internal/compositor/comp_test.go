@@ -78,6 +78,7 @@ type testClient struct {
 	keymapSeen    bool
 	keymapText    string
 	keyboardEnter bool
+	kbEnters      int
 	keyboardKeys  []keyEvent
 	windowTitle   string
 	closeCount    int
@@ -186,6 +187,7 @@ func (c *testClient) Keymap(o *wl.WlKeyboard, format uint32, fd int, size uint32
 func (c *testClient) Enter(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface, keys []byte) {
 	c.mu.Lock()
 	c.keyboardEnter = true
+	c.kbEnters++
 	c.mu.Unlock()
 }
 
@@ -458,8 +460,8 @@ func TestServesShmToplevel(t *testing.T) {
 	// do not apply the XKB +8 offset here: clients add it themselves when they
 	// resolve the advertised keymap.
 	c.wait(func() bool { return c.keyboardEnter }, "wl_keyboard.enter")
-	comp.Key(30, true) // KEY_A
-	comp.Key(30, false)
+	comp.Key(1000, 30, true) // KEY_A
+	comp.Key(1001, 30, false)
 	c.wait(func() bool { return len(c.keyboardKeys) >= 2 }, "wl_keyboard.key")
 	c.mu.Lock()
 	keys := append([]keyEvent(nil), c.keyboardKeys...)

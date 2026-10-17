@@ -2,6 +2,7 @@ package evdev
 
 import (
 	"encoding/binary"
+	"golang.org/x/sys/unix"
 	"sort"
 	"testing"
 	"unsafe"
@@ -227,5 +228,48 @@ func TestCString(t *testing.T) {
 	}
 	if got := cString([]byte{0}); got != "" {
 		t.Errorf("cString(empty) = %q, want %q", got, "")
+	}
+}
+
+// TestDecodeTimestamp checks the kernel timeval is converted to Wayland-style
+// millisecond stamps; the compositor forwards these so clients can run
+// pointer acceleration and smooth-scroll timing.
+func TestDecodeTimestamp(t *testing.T) {
+	b := make([]byte, int(eventSize))
+	raw := (*inputEvent)(unsafe.Pointer(&b[0]))
+	raw.Time = unix.Timeval{Sec: 7, Usec: 500_000}
+	raw.Type = EvKey
+	raw.Code = 30
+	raw.Value = 1
+
+	got := decode(b)
+	if got.Time != 7500 {
+		t.Fatalf("Time = %d, want 7500 ms", got.Time)
+	}
+}
+
+// TestIsTouchpad pins the classifier that keeps raw touchpad coordinates and
+// BTN_TOOL_FINGER taps away from the pointer: no relative axes, absolute
+// axes and the finger-proximity code together identify a touchpad. A mouse
+// (relative axes) or a pen tablet (BTN_TOOL_PEN) must stay mapped.
+func TestIsTouchpad(t *testing.T) {
+	mouse := &Device{relBits: bits(RelX, RelY), keyBits: bits(BtnLeft)}
+	if mouse.IsTouchpad() {
+		t.Errorf("mouse misclassified as touchpad")
+	}
+
+	touchpad := &Device{absBits: bits(AbsMtPositionX, AbsMtPositionY), keyBits: bits(BtnToolFinger, BtnLeft)}
+	if !touchpad.IsTouchpad() {
+		t.Errorf("multitouch clickpad should classify as touchpad")
+	}
+
+	tablet := &Device{absBits: bits(AbsX, AbsY), keyBits: bits(BtnToolPen, BtnLeft)}
+	if tablet.IsTouchpad() {
+		t.Errorf("pen tablet must stay an absolute pointer")
+	}
+
+	oldSynaptics := &Device{relBits: bits(RelX, RelY), absBits: bits(AbsX, AbsY), keyBits: bits(BtnToolFinger)}
+	if oldSynaptics.IsTouchpad() {
+		t.Errorf("legacy PS/2 pad with relative axes is handled as a pointing device")
 	}
 }

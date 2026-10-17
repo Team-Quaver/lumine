@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Team-Quaver/lumine/internal/config"
 	"github.com/Team-Quaver/lumine/internal/ipc"
@@ -89,6 +90,13 @@ type Compositor struct {
 	kbFocus    *Surface
 	kbSerial   uint32
 	kbHeldKeys []uint32
+
+	// auto-repeat state: bare-metal backends hand us one press and wait, so
+	// the compositor synthesises the repeat stream (announced through
+	// wl_keyboard.repeat_info). repCode is the key being repeated (0 = none)
+	// and repStop closes its timer goroutine.
+	repCode uint32
+	repStop chan struct{}
 
 	terminalCmd []string
 	Spawn       func(argv []string)
@@ -399,7 +407,7 @@ func (c *Compositor) SetMods(m Mods) {
 // Key handles one evdev keycode press/release. Returns true when consumed
 // by a compositor binding; unconsumed keys are forwarded to the focused
 // client so applications receive input.
-func (c *Compositor) Key(code uint32, pressed bool) bool {
+func (c *Compositor) Key(time uint32, code uint32, pressed bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if pressed && c.mods.Super {
@@ -410,14 +418,34 @@ func (c *Compositor) Key(code uint32, pressed bool) bool {
 	// wl_keyboard.key events carry raw evdev scancodes. The advertised XKB
 	// keymap lets clients map them; do not apply the XKB +8 offset here.
 	evdev := code
+	held := false
+	for _, k := range c.kbHeldKeys {
+		if k == evdev {
+			held = true
+			break
+		}
+	}
 	if pressed {
-		for _, k := range c.kbHeldKeys {
-			if k == evdev {
+		if held {
+			// A second press while the key is down is a repeat from
+			// somewhere: either our own timer (impossible here, repeats go
+			// straight to forwardKeyLocked) or the host of a nested
+			// backend. When Lumine already owns the repeat stream for this
+			// key the echo is dropped; otherwise the external repeat wins
+			// and our timer is cancelled so the key does not double-type.
+			if c.repCode == evdev {
 				return false
 			}
+			c.stopRepeatLocked()
+			c.forwardKeyLocked(evdev, true, time)
+			return false
 		}
 		c.kbHeldKeys = append(c.kbHeldKeys, evdev)
-	} else {
+		c.forwardKeyLocked(evdev, true, time)
+		c.startRepeatLocked(evdev)
+		return false
+	}
+	if held {
 		for i, k := range c.kbHeldKeys {
 			if k == evdev {
 				c.kbHeldKeys = append(c.kbHeldKeys[:i], c.kbHeldKeys[i+1:]...)
@@ -425,8 +453,92 @@ func (c *Compositor) Key(code uint32, pressed bool) bool {
 			}
 		}
 	}
-	c.forwardKeyLocked(evdev, pressed)
+	if c.repCode == evdev {
+		c.stopRepeatLocked()
+	}
+	c.forwardKeyLocked(evdev, false, time)
 	return false
+}
+
+// ---- auto-repeat ----
+
+// startRepeatLocked (re)arms the repeat timer for a freshly pressed key.
+// Rate and delay come from [input.repeat]; rate <= 0 disables repeating.
+func (c *Compositor) startRepeatLocked(code uint32) {
+	rep := c.Store.Config().Input.Repeat
+	if rep.Rate <= 0 || rep.Delay <= 0 || c.kbFocus == nil {
+		return
+	}
+	c.stopRepeatLocked()
+	stop := make(chan struct{})
+	c.repCode, c.repStop = code, stop
+	delay := time.Duration(rep.Delay) * time.Millisecond
+	interval := time.Duration(time.Second.Nanoseconds()/int64(rep.Rate)) * time.Nanosecond
+	go c.repeatLoop(code, delay, interval, stop)
+}
+
+// stopRepeatLocked cancels the running repeat, if any.
+func (c *Compositor) stopRepeatLocked() {
+	if c.repStop != nil {
+		close(c.repStop)
+		c.repStop = nil
+	}
+	c.repCode = 0
+}
+
+func (c *Compositor) repeatLoop(code uint32, delay, interval time.Duration, stop <-chan struct{}) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-stop:
+		return
+	case <-timer.C:
+	}
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+			c.repeatTick(code)
+		}
+	}
+}
+
+// repeatTick forwards one synthesised press if the key is still held and the
+// focused client still deserves it.
+func (c *Compositor) repeatTick(code uint32) {
+	c.mu.Lock()
+	if c.repCode != code || c.kbFocus == nil {
+		c.mu.Unlock()
+		return
+	}
+	held := false
+	for _, k := range c.kbHeldKeys {
+		if k == code {
+			held = true
+			break
+		}
+	}
+	if !held {
+		c.mu.Unlock()
+		return
+	}
+	c.forwardKeyLocked(code, true, monotonicMs())
+	c.mu.Unlock()
+	c.flushAll()
+}
+
+// timeOrigin anchors the compositor's monotonic clock; process start is close
+// enough to boot for a session's event timestamps.
+var timeOrigin = time.Now()
+
+// monotonicMs is the Wayland timestamp clock: milliseconds on a monotonic
+// clock, wrapped to uint32 like every other compositor does. Go's time.Since
+// is monotonic, so this survives wall-clock jumps.
+func monotonicMs() uint32 {
+	return uint32(time.Since(timeOrigin).Milliseconds())
 }
 
 var keyCodeNames = map[uint32]string{
@@ -520,10 +632,10 @@ func (c *Compositor) closeFocusedLocked() {
 
 // Motion updates the pointer position by a relative delta and routes pointer
 // events (including enter/leave) to the surface under the cursor.
-func (c *Compositor) Motion(dx, dy float64) {
+func (c *Compositor) Motion(time uint32, dx, dy float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.movePointerLocked(c.px+dx, c.py+dy)
+	c.movePointerLocked(time, c.px+dx, c.py+dy)
 }
 
 // Pointer reports the pointer's output-local position, rounded to whole
@@ -536,13 +648,13 @@ func (c *Compositor) Pointer() (int, int) {
 
 // MotionAbs moves the pointer to an absolute output-local position. Nested
 // backends report absolute coordinates from the host compositor.
-func (c *Compositor) MotionAbs(x, y float64) {
+func (c *Compositor) MotionAbs(time uint32, x, y float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.movePointerLocked(x, y)
+	c.movePointerLocked(time, x, y)
 }
 
-func (c *Compositor) movePointerLocked(x, y float64) {
+func (c *Compositor) movePointerLocked(time uint32, x, y float64) {
 	o := c.primaryOutputLocked()
 	if o == nil {
 		return
@@ -551,35 +663,53 @@ func (c *Compositor) movePointerLocked(x, y float64) {
 	c.py = clamp(y, 0, float64(o.H-1))
 	s := c.surfaceAtLocked(c.px, c.py)
 	if s != c.pointSurface {
-		if c.pointSurface != nil {
-			for _, p := range c.pointersByConn[c.pointSurface.conn] {
-				p.Leave(c.nextSerial(), c.pointSurface.surface)
-				p.Frame()
-			}
-		}
-		c.pointSurface = s
-		if s != nil {
-			for _, p := range c.pointersByConn[s.conn] {
-				p.Enter(c.nextSerial(), s.surface, wl.Fixed(c.px-s.rect.X), wl.Fixed(c.py-s.rect.Y))
-				p.Frame()
-			}
-		}
+		c.setPointSurfaceLocked(s)
 	}
 	if s == nil {
 		return
 	}
+	// wl_pointer.motion events must be terminated by a frame event: the
+	// Wayland spec makes frame the commit point of one event batch, and
+	// frame-driven toolkits (GTK in particular) do not apply motion until
+	// they see it.
 	for _, p := range c.pointersByConn[s.conn] {
-		p.Motion(0, wl.Fixed(c.px-s.rect.X), wl.Fixed(c.py-s.rect.Y))
+		p.Motion(time, wl.Fixed(c.px-s.rect.X), wl.Fixed(c.py-s.rect.Y))
+		p.Frame()
+	}
+}
+
+// setPointSurfaceLocked moves the pointer grab between surfaces, emitting the
+// wl_pointer.leave/enter pairs. It is the only legal way to change
+// c.pointSurface: assigning it directly would leave clients without an enter.
+func (c *Compositor) setPointSurfaceLocked(s *Surface) {
+	if s == c.pointSurface {
+		return
+	}
+	if c.pointSurface != nil {
+		for _, p := range c.pointersByConn[c.pointSurface.conn] {
+			p.Leave(c.nextSerial(), c.pointSurface.surface)
+			p.Frame()
+		}
+	}
+	c.pointSurface = s
+	if s != nil {
+		for _, p := range c.pointersByConn[s.conn] {
+			p.Enter(c.nextSerial(), s.surface, wl.Fixed(c.px-s.rect.X), wl.Fixed(c.py-s.rect.Y))
+			p.Frame()
+		}
 	}
 }
 
 // Axis forwards scroll deltas to the surface under the cursor.
-func (c *Compositor) Axis(dx, dy float64) {
+func (c *Compositor) Axis(time uint32, dx, dy float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	s := c.pointSurface
 	if s == nil {
 		s = c.surfaceAtLocked(c.px, c.py)
+		if s != nil {
+			c.setPointSurfaceLocked(s)
+		}
 	}
 	if s == nil {
 		return
@@ -587,39 +717,43 @@ func (c *Compositor) Axis(dx, dy float64) {
 	for _, p := range c.pointersByConn[s.conn] {
 		if dx != 0 {
 			p.AxisSource(wl.WlPointerAxisSourceWheel)
-			p.Axis(0, wl.WlPointerAxisHorizontalScroll, wl.Fixed(dx))
+			p.Axis(time, wl.WlPointerAxisHorizontalScroll, wl.Fixed(dx))
 		}
 		if dy != 0 {
 			p.AxisSource(wl.WlPointerAxisSourceWheel)
-			p.Axis(0, wl.WlPointerAxisVerticalScroll, wl.Fixed(dy))
+			p.Axis(time, wl.WlPointerAxisVerticalScroll, wl.Fixed(dy))
 		}
 		p.Frame()
 	}
 }
 
-// Button forwards pointer buttons to the surface under the cursor; in
-// stack mode, clicking a window raises and focuses it.
-func (c *Compositor) Button(btn uint32, pressed bool) {
+// Button forwards pointer buttons to the surface under the cursor. Clicking
+// a window focuses it in every layout mode: Frame() reasserts keyboard focus
+// from the layout tree each tick, so a tile-mode click that skipped
+// SetFocus would land on the previously focused window instead.
+func (c *Compositor) Button(time uint32, btn uint32, pressed bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	s := c.pointSurface
 	if s == nil {
 		s = c.surfaceAtLocked(c.px, c.py)
-		c.pointSurface = s
+		if s != nil {
+			c.setPointSurfaceLocked(s)
+		}
 	}
 	if s == nil {
 		return
 	}
 	if pressed {
 		for _, tree := range c.trees {
-			if tree.Mode == layout.ModeStack && s.winID != 0 {
-				tree.SetFocus(s.winID)
+			if s.winID != 0 && tree.SetFocus(s.winID) {
+				break
 			}
 		}
 		c.setKeyboardFocusLocked(s)
 	}
 	for _, p := range c.pointersByConn[s.conn] {
-		p.Button(c.nextSerial(), 0, btn, pressedUint(pressed))
+		p.Button(c.nextSerial(), time, btn, pressedUint(pressed))
 		p.Frame()
 	}
 }
@@ -632,6 +766,9 @@ func (c *Compositor) setKeyboardFocusLocked(s *Surface) {
 	if s == c.kbFocus {
 		return
 	}
+	// A repeat in flight belongs to the old surface; wl_keyboard.enter already
+	// carries the held-key list, so the new focus can restart it cleanly.
+	c.stopRepeatLocked()
 	if c.kbFocus != nil {
 		kbs := c.keyboardsByConn[c.kbFocus.conn]
 		serial := c.nextSerial()
@@ -655,7 +792,7 @@ func (c *Compositor) setKeyboardFocusLocked(s *Surface) {
 }
 
 // forwardKeyLocked delivers one key event to the focused client.
-func (c *Compositor) forwardKeyLocked(evdev uint32, pressed bool) {
+func (c *Compositor) forwardKeyLocked(evdev uint32, pressed bool, time uint32) {
 	s := c.kbFocus
 	if s == nil {
 		return
@@ -665,7 +802,7 @@ func (c *Compositor) forwardKeyLocked(evdev uint32, pressed bool) {
 		state = wl.WlKeyboardKeyStatePressed
 	}
 	for _, kb := range c.keyboardsByConn[s.conn] {
-		kb.Key(c.nextSerial(), 0, evdev, state)
+		kb.Key(c.nextSerial(), time, evdev, state)
 	}
 }
 

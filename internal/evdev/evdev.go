@@ -89,11 +89,23 @@ const (
 	KeyMax  = 0xff
 	BtnMisc = 0x100
 
-	BtnLeft   = 0x110
-	BtnRight  = 0x111
-	BtnMiddle = 0x112
-	BtnSide   = 0x113
-	BtnExtra  = 0x114
+	BtnLeft    = 0x110
+	BtnRight   = 0x111
+	BtnMiddle  = 0x112
+	BtnSide    = 0x113
+	BtnExtra   = 0x114
+	BtnForward = 0x115
+	BtnBack    = 0x116
+	BtnTask    = 0x117
+
+	BtnToolPen    = 0x142 // BTN_TOOL_* codes mark tool presence on a
+	BtnToolRubber = 0x146 // pointing device; they are not clickable
+	BtnToolBrush  = 0x148 // buttons and must not be forwarded as
+	BtnToolFinger = 0x14a // wl_pointer.button events.
+	BtnToolDouble = 0x14b
+	BtnToolTriple = 0x14c
+	BtnToolQuad   = 0x14d
+	BtnToolQuint  = 0x14e
 
 	KeyLeftCtrl   = 29
 	KeyRightCtrl  = 97
@@ -125,6 +137,9 @@ type inputEvent struct {
 
 // Event is one decoded input event.
 type Event struct {
+	// Time is the kernel timestamp in milliseconds since CLOCK_MONOTONIC
+	// start, truncated to 32 bits exactly like Wayland event times.
+	Time  uint32
 	Type  uint16
 	Code  uint16
 	Value int32
@@ -177,11 +192,15 @@ func ioctl(fd int, req uintptr, arg unsafe.Pointer) error {
 	return nil
 }
 
-// Open opens an evdev node non-blocking and reads its capabilities. Read
-// direction is O_RDONLY|O_NONBLOCK so the event loop can drain it without
-// blocking.
+// Open opens an evdev node non-blocking and reads its capabilities. The node
+// is opened O_RDWR because the kernel rejects EVIOCGRAB (exclusive grab, what
+// a bare-metal compositor needs) on a read-only descriptor; machines where
+// O_RDWR is not permitted fall back to O_RDONLY and simply cannot grab.
 func Open(path string) (*Device, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open(path, unix.O_RDWR|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		fd, err = unix.Open(path, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("evdev: open %s: %w", path, err)
 	}
@@ -241,6 +260,21 @@ func (d *Device) IsKeyboard() bool {
 // IsButton reports whether the device can report pointer buttons.
 func (d *Device) IsButton() bool {
 	return hasAny(d.keyBits, BtnLeft, BtnRight, BtnMiddle)
+}
+
+// IsTouchpad reports whether the device looks like a touchpad rather than a
+// mouse or a drawing tablet: multitouch/absolute axes with BTN_TOOL_FINGER
+// and no relative axes. Touchpads need gesture interpretation (tap, two-
+// finger scroll, kinetic coasting) that Lumine does not implement yet, so
+// the backend treats this classification as "skip unless the user opts in":
+// mapping the raw ABS_MT position onto the screen would teleport the cursor
+// and fire phantom clicks on every touch.
+func (d *Device) IsTouchpad() bool {
+	if hasAny(d.relBits, RelX, RelY) {
+		return false
+	}
+	hasAbs := hasAny(d.absBits, AbsX, AbsY, AbsMtPositionX, AbsMtPositionY)
+	return hasAbs && hasAny(d.keyBits, BtnToolFinger)
 }
 
 // HasKey reports whether the device advertises an EV_KEY code.
@@ -323,7 +357,8 @@ func (d *Device) Close() error {
 // correct on both 32- and 64-bit hosts, where struct timeval differs.
 func decode(b []byte) Event {
 	raw := (*inputEvent)(unsafe.Pointer(&b[0]))
-	return Event{Type: raw.Type, Code: raw.Code, Value: raw.Value}
+	ms := int64(raw.Time.Sec)*1000 + int64(raw.Time.Usec)/1000
+	return Event{Time: uint32(ms), Type: raw.Type, Code: raw.Code, Value: raw.Value}
 }
 
 // List returns the /dev/input/event* nodes present, ordered by their event

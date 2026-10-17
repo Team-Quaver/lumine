@@ -2,6 +2,8 @@ package backend
 
 import (
 	"errors"
+	"os"
+	"strconv"
 
 	"github.com/Team-Quaver/lumine/internal/evdev"
 	"github.com/Team-Quaver/lumine/internal/wl"
@@ -16,22 +18,59 @@ const (
 	wheelStep    = 15.0
 )
 
-// inputDevice is one opened evdev node plus the absolute-axis ranges needed to
-// scale its coordinates onto the output.
+// inputDevice is one opened evdev node plus the capability flags the event
+// translation needs. The flags are read at open time so the routing logic is
+// testable without a real file descriptor.
 type inputDevice struct {
 	dev  *evdev.Device
 	axes map[uint16]evdev.AbsInfo
 	dead bool
+
+	keyboardDevice bool
+	buttonDevice   bool
+	wheelHiRes     bool
 }
 
 func newInputDevice(d *evdev.Device) *inputDevice {
-	dev := &inputDevice{dev: d, axes: map[uint16]evdev.AbsInfo{}}
+	dev := &inputDevice{
+		dev:            d,
+		axes:           map[uint16]evdev.AbsInfo{},
+		keyboardDevice: d.IsKeyboard(),
+		buttonDevice:   d.IsButton(),
+		wheelHiRes:     d.HasRel(evdev.RelWheelHiRes) || d.HasRel(evdev.RelHWheelHiRes),
+	}
 	for _, code := range []uint16{evdev.AbsX, evdev.AbsY, evdev.AbsMtPositionX, evdev.AbsMtPositionY} {
 		if info, ok := d.AbsInfo(code); ok {
 			dev.axes[code] = info
 		}
 	}
 	return dev
+}
+
+// isPointerButton reports whether an EV_KEY code in the BTN_* range is a
+// clickable mouse button (BTN_LEFT .. BTN_TASK). BTN_TOOL_* and friends sit
+// just above this range and describe tool state, not clicks.
+func isPointerButton(code uint32) bool {
+	return code >= evdev.BtnLeft && code <= evdev.BtnTask
+}
+
+// traceInput mirrors raw evdev events to stderr when LUMINE_DEBUG_INPUT is
+// set. On a bare VT there is no journal and no other reader, so this is the
+// only way to confirm "the kernel sees my mouse" while debugging a session.
+func traceInput(d *inputDevice, e evdev.Event) {
+	if os.Getenv("LUMINE_DEBUG_INPUT") == "" {
+		return
+	}
+	name := "?"
+	if d != nil && d.dev != nil {
+		name = d.dev.Name()
+	}
+	line := "input: " + name +
+		" type=" + strconv.Itoa(int(e.Type)) +
+		" code=" + strconv.Itoa(int(e.Code)) +
+		" value=" + strconv.Itoa(int(e.Value)) +
+		" time=" + strconv.FormatUint(uint64(e.Time), 10) + "\n"
+	_, _ = unix.Write(2, []byte(line))
 }
 
 // drainInput reads every queued event from whichever input device owns fd and
@@ -51,6 +90,7 @@ func (b *DRM) drainInput(fd int) {
 			return
 		}
 		for _, e := range events {
+			traceInput(d, e)
 			b.handleEvent(d, e)
 		}
 		return
@@ -60,35 +100,51 @@ func (b *DRM) drainInput(fd int) {
 func (b *DRM) handleEvent(d *inputDevice, e evdev.Event) {
 	switch e.Type {
 	case evdev.EvKey:
-		b.handleKey(d, e.Code, e.Value != 0)
+		b.handleKey(d, e.Time, e.Code, e.Value != 0)
 	case evdev.EvRel:
-		b.handleRel(e.Code, e.Value)
+		b.handleRel(d, e.Code, e.Value)
 	case evdev.EvAbs:
 		b.handleAbs(d, e.Code, e.Value)
 	case evdev.EvSyn:
 		switch e.Code {
 		case evdev.SynReport:
-			b.flushPointer()
+			b.flushPointer(e.Time)
 		case evdev.SynDropped:
 			// Events were lost; drop the half-built report rather than applying
-			// a bogus delta.
+			// a bogus delta. The kernel follows SYN_DROPPED with the device's
+			// current ABS/KEY state, which reseeds the accumulators normally.
 			b.accX, b.accY, b.scrollX, b.scrollY, b.absDirty = 0, 0, 0, 0, false
 		}
 	}
 }
 
-// handleKey routes an EV_KEY event to the keyboard or the pointer, mirroring the
-// evdev split: keyboard keys live below BTN_MISC (0x100), everything above is a
-// button. Modifier keys additionally refresh the compositor's modifier state.
-func (b *DRM) handleKey(d *inputDevice, code uint16, pressed bool) {
+// handleKey routes an EV_KEY event to the keyboard or the pointer. The split
+// mirrors the evdev layout (keyboard keys live below BTN_MISC, buttons at or
+// above it) with two refinements:
+//
+//   - only BTN_LEFT..BTN_TASK become wl_pointer.button events. BTN_TOOL_*
+//     (finger/pen proximity on touchpads and tablets) would otherwise fire
+//     phantom clicks on every touch.
+//   - a device that cannot report mouse buttons at all (a plain keyboard, a
+//     media remote) keeps its high KEY_* codes as keyboard input, because
+//     those codes (KEY_OK = 0x160 …) sit inside the BTN_* range without
+//     being buttons.
+func (b *DRM) handleKey(d *inputDevice, time uint32, code uint16, pressed bool) {
 	if b.in == nil {
 		return
 	}
 	if code >= evdev.BtnMisc {
-		b.in.Button(uint32(code), pressed)
-		return
+		onPointerDevice := d == nil || d.buttonDevice
+		if onPointerDevice && isPointerButton(uint32(code)) {
+			b.in.Button(time, uint32(code), pressed)
+			return
+		}
+		if onPointerDevice {
+			return // tool-state or unsupported button code
+		}
+		// falls through: keyboard-device codes that merely look like buttons
 	}
-	b.in.Key(uint32(code), pressed)
+	b.in.Key(time, uint32(code), pressed)
 	b.updateMods(code, pressed)
 }
 
@@ -119,16 +175,25 @@ func (b *DRM) updateMods(code uint16, pressed bool) {
 	})
 }
 
-func (b *DRM) handleRel(code uint16, value int32) {
+// handleRel accumulates relative motion and wheel steps. Modern mice report
+// each notch twice (REL_WHEEL plus a 120-unit REL_WHEEL_HI_RES); honouring
+// both would scroll exactly twice as fast, so on hi-res capable devices only
+// the fine axis is used.
+func (b *DRM) handleRel(d *inputDevice, code uint16, value int32) {
+	hiRes := d != nil && d.wheelHiRes
 	switch code {
 	case evdev.RelX:
 		b.accX += float64(value) * pointerScale
 	case evdev.RelY:
 		b.accY += float64(value) * pointerScale
 	case evdev.RelWheel:
-		b.scrollY += float64(value) * wheelStep
+		if !hiRes {
+			b.scrollY += float64(value) * wheelStep
+		}
 	case evdev.RelHWheel:
-		b.scrollX += float64(value) * wheelStep
+		if !hiRes {
+			b.scrollX += float64(value) * wheelStep
+		}
 	case evdev.RelWheelHiRes:
 		b.scrollY += float64(value) / 120.0 * wheelStep
 	case evdev.RelHWheelHiRes:
@@ -172,20 +237,20 @@ func scaleAxis(info evdev.AbsInfo, value int32, length int) float64 {
 
 // flushPointer applies the motion and scroll accumulated since the last
 // SYN_REPORT as one batch, so a relative X/Y pair becomes a single move.
-func (b *DRM) flushPointer() {
+func (b *DRM) flushPointer(time uint32) {
 	if b.in == nil {
 		return
 	}
 	if b.accX != 0 || b.accY != 0 {
-		b.in.Motion(b.accX, b.accY)
+		b.in.Motion(time, b.accX, b.accY)
 		b.accX, b.accY = 0, 0
 	}
 	if b.absDirty {
-		b.in.MotionAbs(b.absX, b.absY)
+		b.in.MotionAbs(time, b.absX, b.absY)
 		b.absDirty = false
 	}
 	if b.scrollX != 0 || b.scrollY != 0 {
-		b.in.Axis(b.scrollX, b.scrollY)
+		b.in.Axis(time, b.scrollX, b.scrollY)
 		b.scrollX, b.scrollY = 0, 0
 	}
 }

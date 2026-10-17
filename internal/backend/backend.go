@@ -18,13 +18,17 @@ import (
 )
 
 // Input is implemented by the compositor, which consumes backend events.
+// Every event carries a Wayland-style timestamp: milliseconds on a monotonic
+// clock, truncated to uint32. Clients use these for pointer acceleration,
+// smooth-scroll interpolation and drag timing, so backends must forward the
+// device's own timestamp instead of a constant.
 type Input interface {
 	SetMods(wl.Mods)
-	Key(code uint32, pressed bool) bool
-	Motion(dx, dy float64)
-	MotionAbs(x, y float64)
-	Button(btn uint32, pressed bool)
-	Axis(dx, dy float64)
+	Key(time uint32, code uint32, pressed bool) bool
+	Motion(time uint32, dx, dy float64)
+	MotionAbs(time uint32, x, y float64)
+	Button(time uint32, btn uint32, pressed bool)
+	Axis(time uint32, dx, dy float64)
 }
 
 // Backend is the nested Wayland output.
@@ -60,6 +64,9 @@ type Backend struct {
 	mods wl.Mods
 	// pending scroll accumulated between compositor frames
 	axisX, axisY float64
+	axisTime     uint32
+	// last pointer-event timestamp; enter/warp carry none
+	lastPtrTime uint32
 
 	needConfigure bool
 }
@@ -377,16 +384,21 @@ func (h *pointerHandler) Enter(o *wl.WlPointer, serial uint32, surface *wl.WlSur
 	if surface != h.b.surface {
 		return
 	}
-	h.b.input.MotionAbs(sx.Float(), sy.Float())
+	// wl_pointer.enter carries no timestamp; reuse the last one we saw so the
+	// compositor never has to forward 0 for the jump onto the window.
+	h.b.input.MotionAbs(h.b.lastPtrTime, sx.Float(), sy.Float())
 }
 func (h *pointerHandler) Leave(o *wl.WlPointer, serial uint32, surface *wl.WlSurface) {}
 func (h *pointerHandler) Motion(o *wl.WlPointer, time uint32, sx, sy wl.Fixed) {
-	h.b.input.MotionAbs(sx.Float(), sy.Float())
+	h.b.lastPtrTime = time
+	h.b.input.MotionAbs(time, sx.Float(), sy.Float())
 }
 func (h *pointerHandler) Button(o *wl.WlPointer, serial uint32, time uint32, button uint32, state uint32) {
-	h.b.input.Button(button, state == wl.WlPointerButtonStatePressed)
+	h.b.lastPtrTime = time
+	h.b.input.Button(time, button, state == wl.WlPointerButtonStatePressed)
 }
 func (h *pointerHandler) Axis(o *wl.WlPointer, time uint32, axis uint32, value wl.Fixed) {
+	h.b.axisTime = time
 	switch axis {
 	case wl.WlPointerAxisHorizontalScroll:
 		h.b.axisX += value.Float()
@@ -396,7 +408,7 @@ func (h *pointerHandler) Axis(o *wl.WlPointer, time uint32, axis uint32, value w
 }
 func (h *pointerHandler) Frame(o *wl.WlPointer) {
 	if h.b.axisX != 0 || h.b.axisY != 0 {
-		h.b.input.Axis(h.b.axisX, h.b.axisY)
+		h.b.input.Axis(h.b.axisTime, h.b.axisX, h.b.axisY)
 		h.b.axisX, h.b.axisY = 0, 0
 	}
 }
@@ -406,7 +418,7 @@ func (h *pointerHandler) AxisDiscrete(o *wl.WlPointer, axis uint32, d int32)    
 func (h *pointerHandler) AxisValue120(o *wl.WlPointer, axis uint32, v int32)             {}
 func (h *pointerHandler) AxisRelativeDirection(o *wl.WlPointer, axis uint32, dir uint32) {}
 func (h *pointerHandler) Warp(o *wl.WlPointer, sx, sy wl.Fixed) {
-	h.b.input.MotionAbs(sx.Float(), sy.Float())
+	h.b.input.MotionAbs(h.b.lastPtrTime, sx.Float(), sy.Float())
 }
 
 type keyboardHandler struct{ b *Backend }
@@ -423,7 +435,7 @@ func (h *keyboardHandler) Enter(o *wl.WlKeyboard, serial uint32, surface *wl.WlS
 func (h *keyboardHandler) Leave(o *wl.WlKeyboard, serial uint32, surface *wl.WlSurface) {}
 func (h *keyboardHandler) Key(o *wl.WlKeyboard, serial uint32, time uint32, key uint32, state uint32) {
 	pressed := state == wl.WlKeyboardKeyStatePressed || state == wl.WlKeyboardKeyStateRepeated
-	h.b.input.Key(key, pressed)
+	h.b.input.Key(time, key, pressed)
 }
 func (h *keyboardHandler) Modifiers(o *wl.WlKeyboard, serial, depressed, latched, locked, group uint32) {
 	m := wl.Mods{

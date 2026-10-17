@@ -13,12 +13,13 @@ import (
 // fakeInput records every call the DRM input translation makes, so the tests
 // can assert on the compositor-visible stream rather than the ioctl details.
 type fakeInput struct {
-	mods    []wl.Mods
-	keys    []fakeKey
-	buttons []fakeKey
-	motion  [][2]float64
-	abs     [][2]float64
-	axis    [][2]float64
+	mods     []wl.Mods
+	keys     []fakeKey
+	buttons  []fakeKey
+	motion   [][2]float64
+	abs      [][2]float64
+	axis     [][2]float64
+	lastTime uint32
 }
 
 type fakeKey struct {
@@ -27,14 +28,27 @@ type fakeKey struct {
 }
 
 func (f *fakeInput) SetMods(m wl.Mods) { f.mods = append(f.mods, m) }
-func (f *fakeInput) Key(code uint32, p bool) bool {
+func (f *fakeInput) Key(time uint32, code uint32, p bool) bool {
 	f.keys = append(f.keys, fakeKey{code, p})
+	f.lastTime = time
 	return true
 }
-func (f *fakeInput) Button(btn uint32, p bool) { f.buttons = append(f.buttons, fakeKey{btn, p}) }
-func (f *fakeInput) Motion(dx, dy float64)     { f.motion = append(f.motion, [2]float64{dx, dy}) }
-func (f *fakeInput) MotionAbs(x, y float64)    { f.abs = append(f.abs, [2]float64{x, y}) }
-func (f *fakeInput) Axis(dx, dy float64)       { f.axis = append(f.axis, [2]float64{dx, dy}) }
+func (f *fakeInput) Button(time uint32, btn uint32, p bool) {
+	f.buttons = append(f.buttons, fakeKey{btn, p})
+	f.lastTime = time
+}
+func (f *fakeInput) Motion(time uint32, dx, dy float64) {
+	f.motion = append(f.motion, [2]float64{dx, dy})
+	f.lastTime = time
+}
+func (f *fakeInput) MotionAbs(time uint32, x, y float64) {
+	f.abs = append(f.abs, [2]float64{x, y})
+	f.lastTime = time
+}
+func (f *fakeInput) Axis(time uint32, dx, dy float64) {
+	f.axis = append(f.axis, [2]float64{dx, dy})
+	f.lastTime = time
+}
 
 func TestCardNumber(t *testing.T) {
 	cases := []struct {
@@ -273,8 +287,8 @@ func TestScaleAxis(t *testing.T) {
 func TestHandleKeyRoutesButtonsAndKeys(t *testing.T) {
 	in := &fakeInput{}
 	b := &DRM{in: in}
-	b.handleKey(nil, evdev.BtnLeft, true)
-	b.handleKey(nil, 30 /* KEY_A */, true)
+	b.handleKey(nil, 100, evdev.BtnLeft, true)
+	b.handleKey(nil, 100, 30 /* KEY_A */, true)
 
 	if len(in.buttons) != 1 || in.buttons[0].code != evdev.BtnLeft || !in.buttons[0].pressed {
 		t.Fatalf("buttons = %+v", in.buttons)
@@ -292,9 +306,9 @@ func TestHandleKeyRoutesButtonsAndKeys(t *testing.T) {
 func TestUpdateMods(t *testing.T) {
 	in := &fakeInput{}
 	b := &DRM{in: in}
-	b.handleKey(nil, evdev.KeyLeftShift, true)
-	b.handleKey(nil, evdev.KeyLeftCtrl, true)
-	b.handleKey(nil, evdev.KeyLeftShift, false)
+	b.handleKey(nil, 1, evdev.KeyLeftShift, true)
+	b.handleKey(nil, 2, evdev.KeyLeftCtrl, true)
+	b.handleKey(nil, 3, evdev.KeyLeftShift, false)
 
 	if len(in.mods) != 3 {
 		t.Fatalf("SetMods calls = %d, want 3", len(in.mods))
@@ -315,12 +329,12 @@ func TestUpdateMods(t *testing.T) {
 func TestHandleRelAndFlush(t *testing.T) {
 	in := &fakeInput{}
 	b := &DRM{in: in}
-	b.handleRel(evdev.RelX, 5)
-	b.handleRel(evdev.RelY, -3)
-	b.handleRel(evdev.RelWheel, 1)          // one notch = wheelStep
-	b.handleRel(evdev.RelWheelHiRes, 120)   // 120 hi-res units = one notch
-	b.handleRel(evdev.RelHWheelHiRes, -240) // two notches left
-	b.flushPointer()
+	b.handleRel(nil, evdev.RelX, 5)
+	b.handleRel(nil, evdev.RelY, -3)
+	b.handleRel(nil, evdev.RelWheel, 1)          // one notch = wheelStep
+	b.handleRel(nil, evdev.RelWheelHiRes, 120)   // 120 hi-res units = one notch
+	b.handleRel(nil, evdev.RelHWheelHiRes, -240) // two notches left
+	b.flushPointer(7)
 
 	if len(in.motion) != 1 || in.motion[0] != [2]float64{5, -3} {
 		t.Fatalf("motion = %v", in.motion)
@@ -335,7 +349,7 @@ func TestHandleRelAndFlush(t *testing.T) {
 	}
 
 	// A second flush with nothing accumulated must not emit anything.
-	b.flushPointer()
+	b.flushPointer(7)
 	if len(in.motion) != 1 || len(in.axis) != 1 {
 		t.Fatalf("empty flush produced events: %v %v", in.motion, in.axis)
 	}
@@ -355,7 +369,7 @@ func TestHandleAbs(t *testing.T) {
 	if len(in.abs) != 0 {
 		t.Fatalf("absolute motion reported before flush")
 	}
-	b.flushPointer()
+	b.flushPointer(7)
 	if len(in.abs) != 1 || in.abs[0] != [2]float64{1000, 500} {
 		t.Fatalf("abs = %v, want [[1000 500]]", in.abs)
 	}
@@ -369,9 +383,9 @@ func TestHandleAbs(t *testing.T) {
 func TestSynDroppedDiscardsReport(t *testing.T) {
 	in := &fakeInput{}
 	b := &DRM{in: in}
-	b.handleRel(evdev.RelX, 42)
+	b.handleRel(nil, evdev.RelX, 42)
 	b.handleEvent(nil, evdev.Event{Type: evdev.EvSyn, Code: evdev.SynDropped})
-	b.flushPointer()
+	b.flushPointer(7)
 	if len(in.motion) != 0 {
 		t.Fatalf("dropped report still applied: %v", in.motion)
 	}
@@ -381,10 +395,61 @@ func TestSynDroppedDiscardsReport(t *testing.T) {
 func TestHandleEventSynReport(t *testing.T) {
 	in := &fakeInput{}
 	b := &DRM{in: in}
-	b.handleEvent(nil, evdev.Event{Type: evdev.EvRel, Code: evdev.RelX, Value: 7})
-	b.handleEvent(nil, evdev.Event{Type: evdev.EvSyn, Code: evdev.SynReport})
+	b.handleEvent(nil, evdev.Event{Time: 55, Type: evdev.EvRel, Code: evdev.RelX, Value: 7})
+	b.handleEvent(nil, evdev.Event{Time: 56, Type: evdev.EvSyn, Code: evdev.SynReport})
 	if len(in.motion) != 1 || in.motion[0] != [2]float64{7, 0} {
 		t.Fatalf("motion = %v", in.motion)
+	}
+	if in.lastTime != 56 {
+		t.Fatalf("motion time = %d, want the SYN_REPORT stamp 56", in.lastTime)
+	}
+}
+
+// TestHiResWheelNotDoubleCounted pins the REL_WHEEL / REL_WHEEL_HI_RES split:
+// modern mice report every notch twice, and honouring both scrolls exactly
+// twice as fast. On a hi-res capable device only the fine axis may be used.
+func TestHiResWheelNotDoubleCounted(t *testing.T) {
+	in := &fakeInput{}
+	b := &DRM{in: in}
+	d := &inputDevice{wheelHiRes: true}
+	b.handleRel(d, evdev.RelWheel, 1)        // must be ignored: the fine axis follows
+	b.handleRel(d, evdev.RelWheelHiRes, 120) // exactly one notch
+	b.handleRel(d, evdev.RelHWheel, -1)
+	b.handleRel(d, evdev.RelHWheelHiRes, -120)
+	b.flushPointer(9)
+	if len(in.axis) != 1 || in.axis[0] != [2]float64{-wheelStep, wheelStep} {
+		t.Fatalf("axis = %v, want [%v %v] from the hi-res axes alone", in.axis, -wheelStep, wheelStep)
+	}
+}
+
+// TestHandleKeyIgnoresToolButtons pins the touchpad/tablet fix: BTN_TOOL_*
+// state changes must not become phantom wl_pointer.button presses, while
+// real buttons (BTN_LEFT .. BTN_TASK) still route through.
+func TestHandleKeyIgnoresToolButtons(t *testing.T) {
+	in := &fakeInput{}
+	b := &DRM{in: in}
+	d := &inputDevice{buttonDevice: true}
+	b.handleKey(d, 1, evdev.BtnToolFinger, true)
+	b.handleKey(d, 2, evdev.BtnTask, true)
+	b.handleKey(d, 3, evdev.BtnToolFinger, false)
+	if len(in.buttons) != 1 || in.buttons[0].code != evdev.BtnTask {
+		t.Fatalf("buttons = %+v, want only BTN_TASK", in.buttons)
+	}
+	if len(in.keys) != 0 {
+		t.Fatalf("tool state leaked into keyboard events: %+v", in.keys)
+	}
+}
+
+// TestHandleKeyMediaKeysStayKeyboard checks codes above BTN_MISC on a device
+// without mouse buttons (media keyboards use KEY_OK = 0x160 …) are forwarded
+// as keys, not misrouted as pointer buttons.
+func TestHandleKeyMediaKeysStayKeyboard(t *testing.T) {
+	in := &fakeInput{}
+	b := &DRM{in: in}
+	d := &inputDevice{keyboardDevice: true}
+	b.handleKey(d, 1, 0x160 /* KEY_OK */, true)
+	if len(in.keys) != 1 || in.keys[0].code != 0x160 || len(in.buttons) != 0 {
+		t.Fatalf("keys=%+v buttons=%+v, want KEY_OK as a keyboard event", in.keys, in.buttons)
 	}
 }
 

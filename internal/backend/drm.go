@@ -518,6 +518,12 @@ func (b *DRM) Close() {
 }
 
 // setupPolling creates the epoll set and opens every keyboard/pointer device.
+// Each device is grabbed exclusively (EVIOCGRAB): without a grab the VT
+// console keeps eating the keyboard (echo into the invisible text buffer,
+// kernel-injected autorepeat that would double-type against the compositor's
+// own repeat stream, Ctrl+Alt+Fn switches under the session).
+// LUMINE_MAP_TOUCHPAD=1 opts a laptop touchpad back in as a raw absolute
+// pointer; by default touchpads are skipped until gesture support exists.
 func (b *DRM) setupPolling() error {
 	epfd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
@@ -536,10 +542,26 @@ func (b *DRM) setupPolling() error {
 			_ = d.Close()
 			continue
 		}
+		if d.IsTouchpad() && os.Getenv("LUMINE_MAP_TOUCHPAD") == "" {
+			b.logf("input: skipping touchpad %q (%s); set LUMINE_MAP_TOUCHPAD=1 to map it raw", d.Name(), path)
+			_ = d.Close()
+			continue
+		}
+		if err := d.Grab(); err != nil {
+			b.logf("input: %q (%s): grab failed: %v (console and other readers stay live)", d.Name(), path, err)
+		}
 		if err := b.watch(d.FD()); err != nil {
 			_ = d.Close()
 			continue
 		}
+		kind := "pointer"
+		switch {
+		case d.IsKeyboard():
+			kind = "keyboard"
+		case d.IsTouchpad():
+			kind = "touchpad"
+		}
+		b.logf("input: %s %q on %s", kind, d.Name(), path)
 		b.inputs = append(b.inputs, newInputDevice(d))
 	}
 	return nil

@@ -30,11 +30,11 @@ func TestPointerStartsCentredAndTracksMotion(t *testing.T) {
 	if x, y := comp.Pointer(); x != 400 || y != 300 {
 		t.Fatalf("initial pointer = (%d,%d), want the output centre (400,300)", x, y)
 	}
-	comp.Motion(10, -20)
+	comp.Motion(1000, 10, -20)
 	if x, y := comp.Pointer(); x != 410 || y != 280 {
 		t.Fatalf("pointer after motion = (%d,%d), want (410,280)", x, y)
 	}
-	comp.MotionAbs(-100, 5000)
+	comp.MotionAbs(1001, -100, 5000)
 	if x, y := comp.Pointer(); x != 0 || y != 599 {
 		t.Fatalf("pointer after clamp = (%d,%d), want (0,599)", x, y)
 	}

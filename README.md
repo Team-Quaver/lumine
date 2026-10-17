@@ -152,6 +152,31 @@ NVIDIA 还是集显承担扫描输出，两者都能工作。
 连接器、分辨率、刷新率来自配置文件的 `[Display]` 段（`monitor` / `resolution` /
 `refresh-Rate`），留空则选第一个已连接的连接器和它的首选模式。
 
+### DRM 输入的语义
+
+`-backend drm` 直接读 `/dev/input/event*`，输入行为与其它合成器对齐：
+
+- 每个键盘/鼠标设备以 **EVIOCGRAB 独占打开**：VT 控制台不再消耗按键（不再回显、
+  不再由内核注入重复事件）。拿不到 grab 只在 `-verbose` 中警告，不阻塞启动。
+- **按键自动重复由合成器合成**（节奏来自 `[input.repeat] delay/rate`，并通过
+  `wl_keyboard.repeat_info` 广播）。裸机上 evdev 只报一次按下，没有这个计时器
+  长按只会出一个字符；嵌套后端里宿主的重复事件会被透传且不会与本合成器的重复流
+  叠加。
+- **时间戳全链路携带**：evdev 的单调时钟毫秒直接转成 Wayland 时间戳传给客户端。
+  指针加速度、平滑滚动与拖拽判定都依赖事件间隔，恒为 0 的时间戳会让 kitty、
+  Qt、Chrome 类客户端表现得"鼠标失灵"。
+- **每个 `wl_pointer.motion` 批次以 `frame` 收尾**（GTK 等按 frame 提交的工具包
+  在收到 `frame` 之前会缓存运动事件）。
+- 点击窗口在 **tile 与 stack 模式都会移动键盘焦点**（此前只有 stack 会，tile
+  下点击焦点会被每帧的布局焦点回写吞掉）。
+- 滚轮只采用 **高分辨率轴**（设备同时报 `REL_WHEEL` 与 `REL_WHEEL_HI_RES` 时不
+  双计）；`BTN_TOOL_*` 之类的接近/触笔状态不会误报为鼠标按键。
+- **触控板默认跳过**（原始 ABS_MT 坐标直接映射会瞬移光标并产生幻影点击，手势
+  支持尚未实现）。设 `LUMINE_MAP_TOUCHPAD=1` 可强行按绝对指针映射；
+  数位板（`BTN_TOOL_PEN`）仍正常按绝对坐标工作。
+- 裸机上调试输入：`LUMINE_DEBUG_INPUT=1` 把每个原始 evdev 事件打到 stderr，
+  确认"内核是否看到了我的鼠标"。
+
 ### 启动子客户端
 
 Lumine 通过 `-socket`（默认 `lumine-wayland`）在 `$XDG_RUNTIME_DIR` 下监听。
@@ -300,6 +325,8 @@ CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go test ./...
   `internal/wl` 生成，但尚未注册为全局对象，相关客户端暂不可用。
 - 指针拖拽/缩放未实现：`xdg_toplevel.move/resize` 为空操作，stack 模式窗口
   目前不能拖动；也没有 `wl_pointer.set_cursor` 光标面渲染。
+- 触控板只有裸坐标映射，没有手势（点按、双指滚动、惯性）。DRM 后端默认**跳过
+  触控板设备**以免光标瞬移与幻影点击，`LUMINE_MAP_TOUCHPAD=1` 可强制启用。
 - per-surface 色彩像素转换（ICC/LUT）未实现（见上）。
 - 单输出为主，`wl_output` 热插拔未实现。
 - `wl_surface` 的 buffer scale / transform / damage 被忽略，每帧整屏重绘。

@@ -85,7 +85,12 @@ type Conn struct {
 	raw *net.UnixConn
 	fd  int
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// sendMu serialises the kernel writes in Flush. Two goroutines flushing
+	// the same connection (the frame pump and the auto-repeat timer) may
+	// hold disjoint snapshots of out, but partial SendmsgN writes must not
+	// interleave in the byte stream.
+	sendMu   sync.Mutex
 	objs     map[uint32]*Object
 	nextID   uint32
 	out      []byte
@@ -318,6 +323,8 @@ func (c *Conn) Flush() error {
 	}()
 
 	sent := false
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	for len(data) > 0 {
 		var cmsg []byte
 		if !sent && len(fds) > 0 {
